@@ -1,12 +1,10 @@
 
-"use strict";
-
 /*
-  COZY LIFE PLANNER
-  Schedule management upgrade
+  Cozy Life Planner
+  Quản lý lịch trình, công việc và mục tiêu.
 
-  Uses the existing index.html and style.css.
-  Storage key is unchanged.
+  Dữ liệu lưu tại localStorage.
+  Chỉ dùng ☆ và ★ để đánh dấu quan trọng.
 */
 
 const $ = id => document.getElementById(id);
@@ -18,32 +16,13 @@ function dateKey(d) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-function todayKey() {
-  return dateKey(new Date());
-}
-
-function validDate(key) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(key || "")) return false;
-
-  const [y, m, d] = key.split("-").map(Number);
-  const value = new Date(y, m - 1, d);
-
-  return value.getFullYear() === y &&
-    value.getMonth() === m - 1 &&
-    value.getDate() === d;
-}
-
 function parseDate(key) {
-  if (!validDate(key)) return null;
   const [y, m, d] = key.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
 
-function addDays(key, days) {
-  const date = parseDate(key);
-  if (!date) return key;
-  date.setDate(date.getDate() + days);
-  return dateKey(date);
+function todayKey() {
+  return dateKey(new Date());
 }
 
 function periodKey(type, d = new Date()) {
@@ -59,12 +38,12 @@ function makeId() {
 }
 
 function makeButton(label, handler, className = "") {
-  const b = document.createElement("button");
-  b.type = "button";
-  b.textContent = label;
-  b.className = className;
-  b.onclick = handler;
-  return b;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  button.className = className;
+  button.onclick = handler;
+  return button;
 }
 
 function emptyMessage(message) {
@@ -74,65 +53,22 @@ function emptyMessage(message) {
   return p;
 }
 
-function makeField(labelText, type, value = "") {
-  const label = document.createElement("label");
-  label.textContent = labelText;
-
-  const input = document.createElement("input");
-  input.type = type;
-  input.value = value;
-  input.style.display = "block";
-  input.style.width = "100%";
-  label.append(input);
-
-  return { label, input };
-}
-
-function styleForm(form) {
-  Object.assign(form.style, {
-    display: "grid",
-    gap: "12px",
-    padding: "16px",
-    margin: "16px 0",
-    border: "1px solid #eadfd5",
-    borderRadius: "12px"
-  });
-}
-
-function styleRow(row) {
-  Object.assign(row.style, {
-    display: "flex",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: "10px"
-  });
-}
-
-// =====================================
-// 1. LOAD AND PROTECT DATA
-// =====================================
+// ==========================================
+// 1. DỮ LIỆU
+// ==========================================
 
 let state;
 let storageReadable = true;
 
 try {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  state = raw ? JSON.parse(raw) : {};
-} catch (error) {
-  console.error(error);
+  state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+} catch {
+  state = {};
   storageReadable = false;
-  state = {};
-  alert(
-    "無法讀取原有資料，已停止儲存以避免覆蓋。" +
-    "\nKhông đọc được dữ liệu cũ. Ứng dụng sẽ không ghi đè dữ liệu."
-  );
+  alert("無法讀取舊資料，已停止寫入 / Không đọc được dữ liệu cũ; đã ngừng ghi để tránh mất dữ liệu.");
 }
 
-if (!state || typeof state !== "object" ||
-    Array.isArray(state)) {
-  state = {};
-}
-
+if (!state || typeof state !== "object") state = {};
 if (!Array.isArray(state.events)) state.events = [];
 if (!Array.isArray(state.tasks)) state.tasks = [];
 
@@ -151,24 +87,41 @@ for (const type of ["day", "month", "year"]) {
 }
 
 function save() {
-  if (!storageReadable) {
-    alert("資料尚未安全載入 / Chưa thể lưu dữ liệu an toàn.");
-    return false;
-  }
-
+  if (!storageReadable) return false;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     return true;
   } catch (error) {
     console.error(error);
-    alert("儲存失敗 / Lưu dữ liệu thất bại.");
+    alert("資料儲存失敗 / Không thể lưu dữ liệu.");
     return false;
   }
 }
 
-// =====================================
-// 2. MIGRATE OLD DATA
-// =====================================
+const initialDate = new Date();
+
+let year = initialDate.getFullYear();
+let month = initialDate.getMonth();
+let selected = todayKey();
+
+let activeGoalType = "year";
+let selectedTaskDate = todayKey();
+
+const viewing = {
+  day: periodKey("day"),
+  month: periodKey("month"),
+  year: periodKey("year")
+};
+
+const goalTypes = {
+  year: "年度目標 / Mục tiêu năm",
+  month: "月度目標 / Mục tiêu tháng",
+  day: "每日目標 / Mục tiêu ngày"
+};
+
+// ==========================================
+// 2. CHUYỂN ĐỔI DỮ LIỆU CŨ
+// ==========================================
 
 function migrateData() {
   for (const type of ["year", "month", "day"]) {
@@ -183,7 +136,6 @@ function migrateData() {
     ) {
       items.push({
         id: makeId(),
-        period: periodKey(type),
         name: oldText.trim(),
         done: false,
         progress: 0,
@@ -193,99 +145,77 @@ function migrateData() {
 
     for (const goal of items) {
       if (!goal.id) goal.id = makeId();
-      if (!goal.period) goal.period = periodKey(type);
+
+      if (typeof goal.important !== "boolean") {
+        goal.important = false;
+      }
 
       if (typeof goal.done !== "boolean") {
         goal.done = Number(goal.progress) >= 100;
       }
 
-      goal.important = !!goal.important;
+      if (!goal.period) {
+        goal.period = periodKey(type);
+      }
+
       goal.progress = goal.done ? 100 : 0;
     }
   }
 
   state.goalPeriodMigrationV1 = true;
 
+  // Công việc cũ chưa có ngày sẽ được gắn vào
+  // ngày thực hiện nâng cấp.
   for (const task of state.tasks) {
     if (!task.id) task.id = makeId();
 
-    if (!validDate(task.date)) {
+    if (!task.date) {
       task.date = todayKey();
     }
 
-    if (!["none", "daily", "weekly", "monthly", "yearly"]
-      .includes(task.repeat)) {
+    if (!task.repeat) {
       task.repeat = "none";
     }
 
-    task.important = !!task.important;
+    if (typeof task.important !== "boolean") {
+      task.important = false;
+    }
 
-    if (!task.completions ||
-        typeof task.completions !== "object" ||
-        Array.isArray(task.completions)) {
+    if (
+      !task.completions ||
+      typeof task.completions !== "object"
+    ) {
       task.completions = {};
-      if (task.done) task.completions[task.date] = true;
-    }
 
-    if (!Array.isArray(task.excludedDates)) {
-      task.excludedDates = [];
-    }
-
-    if (!task.overrides ||
-        typeof task.overrides !== "object" ||
-        Array.isArray(task.overrides)) {
-      task.overrides = {};
-    }
-
-    if (!validDate(task.endDate)) {
-      task.endDate = "";
+      if (task.done) {
+        task.completions[task.date] = true;
+      }
     }
   }
 
-  for (const event of state.events) {
-    if (!event.id) event.id = makeId();
+  for (const task of state.tasks) {
+    if (!Array.isArray(task.excludedDates)) task.excludedDates = [];
+    if (!task.overrides || typeof task.overrides !== "object" || Array.isArray(task.overrides)) task.overrides = {};
+    if (!task.endDate || !/^\d{4}-\d{2}-\d{2}$/.test(task.endDate)) task.endDate = "";
   }
-
+  if (!Array.isArray(state.trash)) state.trash=[];
+  for (const task of state.tasks) {
+    task.notes=typeof task.notes==='string'?task.notes:'';
+    task.goalRef=task.goalRef||'';
+    task.remindAt=task.remindAt||'';
+    task.skippedDates=Array.isArray(task.skippedDates)?task.skippedDates:[];
+    task.completedAt=task.completedAt && typeof task.completedAt==='object'?task.completedAt:{};
+    task.moved=task.moved && typeof task.moved==='object'?task.moved:{};
+  }
+  for (const event of state.events) event.notes=typeof event.notes==='string'?event.notes:'';
   save();
 }
 
 migrateData();
 
-// =====================================
-// 3. VIEW STATE
-// =====================================
-
-const now = new Date();
-
-let year = now.getFullYear();
-let month = now.getMonth();
-let selected = todayKey();
-let selectedTaskDate = todayKey();
-let activeGoalType = "year";
-
-const viewing = {
-  day: periodKey("day"),
-  month: periodKey("month"),
-  year: periodKey("year")
-};
-
-const goalTypes = {
-  year: "年度目標 / Mục tiêu năm",
-  month: "月度目標 / Mục tiêu tháng",
-  day: "每日目標 / Mục tiêu ngày"
-};
-
-const repeatLabels = {
-  none: "不重複 / Không lặp lại",
-  daily: "每天 / Hằng ngày",
-  weekly: "每週 / Hằng tuần",
-  monthly: "每月 / Hằng tháng",
-  yearly: "每年 / Hằng năm"
-};
-
-// =====================================
-// 4. NAVIGATION
-// =====================================
+// ==========================================
+// 3. ĐIỀU HƯỚNG
+// ==========================================
 
 const pageMap = {
   home: "homePage",
@@ -328,7 +258,9 @@ function showPage(page) {
     renderPerformance();
   }
 
-  if (target === "performance") renderPerformance();
+  if (target === "performance") {
+    renderPerformance();
+  }
 
   window.scrollTo(0, 0);
 }
@@ -342,956 +274,403 @@ function navigate(page) {
 }
 
 document.querySelectorAll("nav a[data-page]").forEach(link => {
-  link.onclick = e => {
-    e.preventDefault();
+  link.onclick = event => {
+    event.preventDefault();
     navigate(link.dataset.page);
   };
 });
 
-document.querySelectorAll("[data-schedule-section]")
-  .forEach(link => {
-    link.onclick = e => {
-      e.preventDefault();
-      navigate(link.dataset.scheduleSection);
-    };
-  });
+document.querySelectorAll("[data-schedule-section]").forEach(link => {
+  link.onclick = event => {
+    event.preventDefault();
+    navigate(link.dataset.scheduleSection);
+  };
+});
 
-document.querySelectorAll("[data-back-schedule]")
-  .forEach(button => {
-    button.onclick = () => navigate("calendar");
-  });
+document.querySelectorAll("[data-back-schedule]").forEach(button => {
+  button.onclick = () => navigate("calendar");
+});
 
 window.addEventListener("hashchange", () => {
   showPage(location.hash.slice(1) || "home");
 });
 
-// =====================================
-// 5. RECURRING TASK RULES
-// =====================================
-
-function occursByRule(task, key) {
-  if (!validDate(key) || !validDate(task.date)) {
-    return false;
-  }
-
-  if (key < task.date) return false;
+// ==========================================
+// 4–7. LỊCH, SỰ KIỆN, CÔNG VIỆC
+// ==========================================
+const repeatLabels = {
+  none: "不重複 / Không lặp lại", daily: "每天 / Hằng ngày",
+  weekly: "每週 / Hằng tuần", monthly: "每月 / Hằng tháng",
+  yearly: "每年 / Hằng năm"
+};
+const validDate = key => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key || "")) return false;
+  const [y,m,d] = key.split("-").map(Number);
+  const t = new Date(y,m-1,d);
+  return t.getFullYear()===y && t.getMonth()===m-1 && t.getDate()===d;
+};
+function shiftDate(key, delta) {
+  const d = parseDate(key); d.setDate(d.getDate()+delta); return dateKey(d);
+}
+function taskOccursOn(task,key) {
+  if (!validDate(key) || !validDate(task.date) || key < task.date) return false;
   if (task.endDate && key > task.endDate) return false;
-
+  if (task.excludedDates?.includes(key)) return false;
+  if (task.moved && Object.values(task.moved).includes(key)) return true;
+  if (task.moved && Object.hasOwn(task.moved,key)) return false;
   const repeat = task.repeat || "none";
-
   if (repeat === "none") return key === task.date;
   if (repeat === "daily") return true;
-
-  const start = parseDate(task.date);
-  const current = parseDate(key);
-
-  if (repeat === "weekly") {
-    return start.getDay() === current.getDay();
-  }
-
-  if (repeat === "monthly") {
-    return start.getDate() === current.getDate();
-  }
-
-  if (repeat === "yearly") {
-    return start.getMonth() === current.getMonth() &&
-      start.getDate() === current.getDate();
-  }
-
+  const a=parseDate(task.date), b=parseDate(key);
+  if (repeat === "weekly") return a.getDay() === b.getDay();
+  if (repeat === "monthly") return a.getDate() === b.getDate();
+  if (repeat === "yearly") return a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
   return false;
 }
-
-function taskOccursOn(task, key) {
-  if (!occursByRule(task, key)) return false;
-
-  return !task.excludedDates.includes(key);
+function taskOrigin(task,key) {
+  return Object.entries(task.moved||{}).find(([,destination])=>destination===key)?.[0] || key;
 }
-
-function taskName(task, key) {
-  const override = task.overrides?.[key];
-
-  return typeof override?.name === "string"
-    ? override.name
-    : task.name;
+function taskStatus(task,key) {
+  const original=taskOrigin(task,key);
+  if(task.skippedDates?.includes(original)) return 'skipped';
+  if(task.completions?.[original]) return 'done';
+  return 'pending';
 }
-
-function taskImportant(task, key) {
-  const override = task.overrides?.[key];
-
-  return typeof override?.important === "boolean"
-    ? override.important
-    : task.important;
-}
-
+function taskNotes(task,key) { return task.overrides?.[taskOrigin(task,key)]?.notes ?? task.notes ?? ''; }
+function taskReminder(task,key) { return task.overrides?.[taskOrigin(task,key)]?.remindAt ?? task.remindAt ?? ''; }
+function taskGoal(task,key) { return task.overrides?.[taskOrigin(task,key)]?.goalRef ?? task.goalRef ?? ''; }
+function taskName(task,key) { return task.overrides?.[key]?.name ?? task.name; }
+function taskImportant(task,key) { return task.overrides?.[key]?.important ?? !!task.important; }
 function getTasksForDate(key) {
-  return state.tasks
-    .filter(task => taskOccursOn(task, key))
-    .sort((a, b) =>
-      Number(taskImportant(b, key)) -
-      Number(taskImportant(a, key))
-    );
+  return state.tasks.filter(t=>taskOccursOn(t,key))
+    .sort((a,b)=>Number(taskImportant(b,key))-Number(taskImportant(a,key)));
 }
-
-function isTaskDone(task, key) {
-  return !!task.completions?.[key];
-}
-
-function refreshTasks() {
-  renderTasks();
-  renderScheduleTasks();
-  renderCalendar();
-}
-
-function setTaskDone(task, key, done) {
+function isTaskDone(task,key) { return taskStatus(task,key)==="done"; }
+function refreshTaskViews() { renderTasks(); renderScheduleTasks(); renderCalendar(); }
+function setTaskDone(task,key,done) {
+  if (!task.completions) task.completions={};
+  const original=taskOrigin(task,key);
   if (done) {
-    task.completions[key] = true;
+    task.completions[original]=true;
+    task.completedAt[original]=new Date().toISOString();
+    task.skippedDates=task.skippedDates.filter(d=>d!==original);
   } else {
-    delete task.completions[key];
+    delete task.completions[original];delete task.completedAt[original];
   }
-
-  save();
-  refreshTasks();
+  if (save()) refreshTaskViews();
 }
-
-// =====================================
-// 6. EDIT / ADD TASK
-// =====================================
-
-function showTaskForm(
-  container,
-  defaultDate,
-  editingTask = null,
-  mode = "series"
-) {
-  container.querySelectorAll(".task-editor-form")
-    .forEach(form => form.remove());
-
-  const form = document.createElement("form");
-  form.className = "task-editor-form";
-  styleForm(form);
-
-  const single = !!editingTask && mode === "single";
-
-  const title = document.createElement("h3");
-  title.textContent = editingTask
-    ? single
-      ? "編輯單次待辦 / Sửa riêng ngày này"
-      : "編輯整個系列 / Sửa toàn bộ chuỗi"
-    : "新增待辦 / Thêm công việc";
-
-  const nameField = makeField(
-    "工作名稱 / Tên công việc",
-    "text",
-    editingTask
-      ? single
-        ? taskName(editingTask, defaultDate)
-        : editingTask.name
-      : ""
-  );
-
-  nameField.input.required = true;
-  nameField.input.maxLength = 150;
-
-  const dateField = makeField(
-    "開始日期 / Ngày bắt đầu",
-    "date",
-    editingTask?.date || defaultDate
-  );
-
-  dateField.input.required = true;
-
-  const repeatLabel = document.createElement("label");
-  repeatLabel.textContent = "重複設定 / Lặp lại";
-
-  const repeatSelect = document.createElement("select");
-
-  for (const [value, text] of Object.entries(repeatLabels)) {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = text;
-    repeatSelect.append(option);
-  }
-
-  repeatSelect.value = editingTask?.repeat || "none";
-  repeatLabel.append(repeatSelect);
-
-  const endField = makeField(
-    "結束日期 / Ngày kết thúc lặp lại",
-    "date",
-    editingTask?.endDate || ""
-  );
-
-  const importantLabel = document.createElement("label");
-  const importantInput = document.createElement("input");
-  importantInput.type = "checkbox";
-
-  importantInput.checked = editingTask
-    ? single
-      ? taskImportant(editingTask, defaultDate)
-      : editingTask.important
-    : false;
-
-  importantLabel.append(
-    importantInput,
-    document.createTextNode(
-      " ★ 重要事項 / Công việc quan trọng"
-    )
-  );
-
-  const note = document.createElement("p");
-  note.style.fontSize = "13px";
-  note.style.opacity = "0.75";
-
-  if (single) {
-    note.textContent =
-      "只修改這一天的名稱與重要標記。" +
-      " / Chỉ sửa tên và dấu sao của ngày này.";
-
-    dateField.label.hidden = true;
-    repeatLabel.hidden = true;
-    endField.label.hidden = true;
-  } else {
-    note.textContent =
-      "每月31日不會出現在沒有31日的月份。" +
-      " / Ngày 31 không xuất hiện trong tháng thiếu ngày 31.";
-  }
-
-  function updateEndVisibility() {
-    if (!single) {
-      endField.label.hidden =
-        repeatSelect.value === "none";
-    }
-  }
-
-  repeatSelect.onchange = updateEndVisibility;
-  updateEndVisibility();
-
-  const actions = document.createElement("div");
-  styleRow(actions);
-
-  const submit = document.createElement("button");
-  submit.type = "submit";
-  submit.className = "primary";
-  submit.textContent = "儲存 / Lưu";
-
-  const cancel = makeButton(
-    "取消 / Hủy",
-    () => form.remove()
-  );
-
-  actions.append(submit, cancel);
-
-  form.append(
-    title,
-    note,
-    nameField.label,
-    dateField.label,
-    repeatLabel,
-    endField.label,
-    importantLabel,
-    actions
-  );
-
-  form.onsubmit = e => {
-    e.preventDefault();
-
-    const name = nameField.input.value.trim();
-
-    if (!name) {
-      alert("請輸入名稱 / Hãy nhập tên công việc.");
-      return;
-    }
-
-    if (single) {
-      editingTask.overrides[defaultDate] = {
-        ...editingTask.overrides[defaultDate],
-        name,
-        important: importantInput.checked
-      };
-    } else {
-      const startDate = dateField.input.value;
-      const endDate = repeatSelect.value === "none"
-        ? ""
-        : endField.input.value;
-
-      if (!validDate(startDate)) {
-        alert("開始日期錯誤 / Ngày bắt đầu không hợp lệ.");
-        return;
-      }
-
-      if (
-        endDate &&
-        (!validDate(endDate) || endDate < startDate)
-      ) {
-        alert(
-          "結束日期不能早於開始日期。" +
-          " / Ngày kết thúc không thể trước ngày bắt đầu."
-        );
-        return;
-      }
-
-      if (editingTask) {
-        editingTask.name = name;
-        editingTask.date = startDate;
-        editingTask.repeat = repeatSelect.value;
-        editingTask.endDate = endDate;
-        editingTask.important = importantInput.checked;
-      } else {
-        state.tasks.push({
-          id: makeId(),
-          name,
-          date: startDate,
-          repeat: repeatSelect.value,
-          endDate,
-          important: importantInput.checked,
-          completions: {},
-          excludedDates: [],
-          overrides: {}
-        });
-      }
-    }
-
-    save();
-    refreshTasks();
-  };
-
-  container.append(form);
-  nameField.input.focus();
-  form.scrollIntoView({
-    behavior: "smooth",
-    block: "nearest"
+function makeField(labelText,type,value="") {
+  const label=document.createElement("label"); label.textContent=labelText;
+  const input=document.createElement("input"); input.type=type; input.value=value;
+  input.style.display="block"; input.style.width="100%"; label.append(input);
+  return {label,input};
+}
+function selectChoice(message, allowed, fallback="0") {
+  const answer=prompt(message,fallback);
+  if (answer===null || answer==="0") return null;
+  if (!allowed.includes(answer)) { alert("請選擇有效選項 / Hãy chọn phương án hợp lệ."); return null; }
+  return answer;
+}
+function makeTaskEditor(container, date, task=null, mode="all") {
+  container.querySelectorAll(".task-editor").forEach(el=>el.remove());
+  const form=document.createElement("form"); form.className="task-editor";
+  Object.assign(form.style,{display:"grid",gap:"12px",margin:"16px 0",padding:"16px",border:"1px solid #eadfd5",borderRadius:"12px"});
+  const heading=document.createElement("h3");
+  heading.textContent=task ? (mode==="single" ? "編輯單次 / Sửa riêng ngày" : mode==="future" ? "從此日起修改 / Sửa từ ngày này" : "編輯整個系列 / Sửa toàn bộ") : "新增待辦 / Thêm công việc";
+  const name=makeField("工作名稱 / Tên công việc","text",task ? mode==="all" ? task.name : taskName(task,date) : "");
+  name.input.required=true; name.input.maxLength=150;
+  const start=makeField("開始日期 / Ngày bắt đầu","date",task && mode==="all" ? task.date : date);
+  start.input.required=true;
+  const end=makeField("結束日期 / Ngày kết thúc (không bắt buộc)","date",task?.endDate || "");
+  const repeatLabel=document.createElement("label"); repeatLabel.textContent="重複設定 / Lặp lại";
+  const repeat=document.createElement("select");
+  Object.entries(repeatLabels).forEach(([value,label])=>{
+    const opt=document.createElement("option");opt.value=value;opt.textContent=label;repeat.append(opt);
   });
-}
-
-function editTask(task, key) {
-  selectedTaskDate = key;
-  navigate("tasks");
-  renderScheduleTasks();
-
-  let mode = "series";
-
-  if (task.repeat !== "none") {
-    const choice = prompt(
-      "選擇修改方式 / Chọn cách chỉnh sửa:\n" +
-      "1 = Chỉ ngày này\n" +
-      "2 = Toàn bộ chuỗi\n" +
-      "0 = Hủy",
-      "1"
-    );
-
-    if (choice === null || choice === "0") return;
-
-    if (!["1", "2"].includes(choice)) {
-      alert("請選擇 1 或 2 / Hãy chọn 1 hoặc 2.");
-      return;
-    }
-
-    mode = choice === "1" ? "single" : "series";
+  repeat.value=task?.repeat || "none"; repeatLabel.append(repeat);
+  const notes=makeField("備註 / Ghi chú","text",task ? (mode==='all'?task.notes:taskNotes(task,date)) : '');
+  const reminder=makeField("提醒時間 / Nhắc lúc","datetime-local",task ? (mode==='all'?task.remindAt:taskReminder(task,date)) : '');
+  const goalLabel=document.createElement('label');goalLabel.textContent='連結目標 / Liên kết mục tiêu';
+  const goalSelect=document.createElement('select');
+  const noneGoal=document.createElement('option');noneGoal.value='';noneGoal.textContent='不連結 / Không liên kết';goalSelect.append(noneGoal);
+  for(const type of ['day','month','year']) for(const goal of state.goalLists[type]) {
+    const option=document.createElement('option');option.value=goal.id;
+    option.textContent=`${goalTypes[type]} · ${goal.period} · ${goal.name}`;goalSelect.append(option);
   }
-
-  showTaskForm(
-    $("scheduleTaskList"),
-    key,
-    task,
-    mode
-  );
-}
-
-function deleteTask(task, key) {
-  if (task.repeat === "none") {
-    if (!confirm("刪除此工作？ / Xóa công việc này?")) {
-      return;
-    }
-
-    state.tasks = state.tasks.filter(item => item !== task);
-  } else {
-    const choice = prompt(
-      "選擇刪除方式 / Chọn cách xóa:\n" +
-      "1 = Chỉ lần xuất hiện này\n" +
-      "2 = Xóa toàn bộ chuỗi và lịch sử\n" +
-      "0 = Hủy",
-      "0"
-    );
-
-    if (choice === null || choice === "0") return;
-
-    if (choice === "1") {
-      if (!task.excludedDates.includes(key)) {
-        task.excludedDates.push(key);
-      }
-    } else if (choice === "2") {
-      if (!confirm(
-        "將刪除整個系列及完成紀錄。" +
-        "\nXóa cả chuỗi và lịch sử hoàn thành?"
-      )) return;
-
-      state.tasks = state.tasks.filter(item => item !== task);
+  goalSelect.value=task ? (mode==='all'?task.goalRef:taskGoal(task,date)) : '';
+  goalLabel.append(goalSelect);
+  const importantLabel=document.createElement("label");
+  const important=document.createElement("input");important.type="checkbox";
+  important.checked=task ? mode==="all" ? !!task.important : taskImportant(task,date) : false;
+  importantLabel.append(important,document.createTextNode(" ★ 重要事項 / Quan trọng"));
+  const hint=document.createElement("p");hint.style.fontSize="13px";
+  hint.textContent=mode==="single" ? "只修改這一天的名稱與重要標記 / Chỉ sửa tên và dấu sao ngày này." : mode==="future" ? "之前的歷史保持不變 / Giữ nguyên lịch sử trước ngày chọn." : "變更重複規則可能影響舊紀錄顯示 / Đổi quy tắc có thể ảnh hưởng cách hiển thị lịch sử.";
+  const single=mode==="single";
+  start.label.hidden=single;repeatLabel.hidden=single;end.label.hidden=single;
+  function toggleEnd(){ if(!single) end.label.hidden=repeat.value==="none"; }
+  repeat.onchange=toggleEnd; toggleEnd();
+  const actions=document.createElement("div");actions.style.display="flex";actions.style.gap="10px";
+  const submit=document.createElement("button");submit.type="submit";submit.className="primary";submit.textContent="儲存 / Lưu";
+  actions.append(submit,makeButton("取消 / Hủy",()=>form.remove()));
+  form.append(heading,hint,name.label,start.label,repeatLabel,end.label,notes.label,reminder.label,goalLabel,importantLabel,actions);
+  form.onsubmit=e=>{
+    e.preventDefault();const title=name.input.value.trim();
+    if(!title){alert("請輸入名稱 / Nhập tên công việc.");return;}
+    if(single){
+      const origin=taskOrigin(task,date);
+      task.overrides[origin]={...task.overrides[origin],name:title,important:important.checked,notes:notes.input.value,remindAt:reminder.input.value,goalRef:goalSelect.value};
     } else {
-      return;
+      const startDate=mode==="future" ? date : start.input.value;
+      const endDate=repeat.value==="none" ? "" : end.input.value;
+      if(!validDate(startDate) || (endDate && (!validDate(endDate) || endDate<startDate))){
+        alert("日期不正確 / Ngày không hợp lệ.");return;
+      }
+      if(mode==="future"){
+        // Split at date: old series ends the day before; new series starts on selected date.
+        const previousEnd=shiftDate(date,-1);
+        const oldEnd=task.endDate;
+        const next={id:makeId(),name:title,date:startDate,repeat:repeat.value,
+          endDate:endDate || (oldEnd && oldEnd>=date ? oldEnd : ""),
+          important:important.checked,notes:notes.input.value,remindAt:reminder.input.value,goalRef:goalSelect.value,
+          completions:{},completedAt:{},skippedDates:[],moved:{},excludedDates:[],overrides:{}};
+        for(const field of ['completedAt','moved']) {
+          next[field]={};
+          for(const [day,value] of Object.entries(task[field]||{})) if(day>=date) {
+            next[field][day]=value;delete task[field][day];
+          }
+        }
+        next.skippedDates=(task.skippedDates||[]).filter(day=>day>=date);
+        task.skippedDates=(task.skippedDates||[]).filter(day=>day<date);
+        for(const [day,done] of Object.entries(task.completions||{})){
+          if(day>=date){next.completions[day]=done;delete task.completions[day];}
+        }
+        for(const day of task.excludedDates||[]){if(day>=date)next.excludedDates.push(day);}
+        task.excludedDates=(task.excludedDates||[]).filter(day=>day<date);
+        for(const [day,override] of Object.entries(task.overrides||{})){
+          if(day>=date){next.overrides[day]=override;delete task.overrides[day];}
+        }
+        task.endDate=previousEnd;
+        state.tasks.push(next);
+      } else if(task){
+        if(mode==="all" && task.repeat!=="none" && !confirm("修改整個系列可能改變歷史顯示，繼續？\nSửa cả chuỗi có thể đổi cách hiển thị lịch sử. Tiếp tục?"))return;
+        Object.assign(task,{name:title,date:startDate,repeat:repeat.value,endDate,important:important.checked,
+          notes:notes.input.value,remindAt:reminder.input.value,goalRef:goalSelect.value});
+      } else {
+        state.tasks.push({id:makeId(),name:title,date:startDate,repeat:repeat.value,
+          endDate,important:important.checked,notes:notes.input.value,remindAt:reminder.input.value,goalRef:goalSelect.value,
+          completions:{},completedAt:{},skippedDates:[],moved:{},excludedDates:[],overrides:{}});
+      }
+    }
+    if(save())refreshTaskViews();
+  };
+  container.append(form);name.input.focus();
+}
+function editTask(task,date) {
+  let mode="all";
+  if(task.repeat!=="none"){
+    const answer=selectChoice("修改方式 / Cách sửa:\n1 = Chỉ ngày này\n2 = Từ ngày này trở đi\n3 = Toàn bộ chuỗi\n0 = Hủy",["1","2","3"],"1");
+    if(!answer)return;
+    mode={"1":"single","2":"future","3":"all"}[answer];
+  }
+  selectedTaskDate=date;navigate("tasks");renderScheduleTasks();
+  makeTaskEditor($("scheduleTaskList"),date,task,mode);
+}
+function putInTrash(type, payload, label) {
+  state.trash.push({id:makeId(),type,payload:structuredClone(payload),label,deletedAt:new Date().toISOString()});
+}
+function skipTask(task,key) {
+  const origin=taskOrigin(task,key);
+  if(!task.skippedDates.includes(origin)) task.skippedDates.push(origin);
+  delete task.completions[origin];delete task.completedAt[origin];
+  if(save())refreshTaskViews();
+}
+function moveTask(task,key) {
+  const destination=prompt('移至日期 YYYY-MM-DD / Dời sang ngày:',key);
+  if(!destination || !validDate(destination)) return;
+  if(destination===key)return;
+  if(taskOccursOn(task,destination)) {
+    alert('目標日期已有此工作 / Ngày mới đã có công việc này.');return;
+  }
+  task.moved[taskOrigin(task,key)]=destination;
+  if(save())refreshTaskViews();
+}
+function deleteTask(task,date) {
+  if(task.repeat==="none"){
+    if(!confirm("刪除此工作？ / Xóa công việc này?"))return;
+    putInTrash('task',task,task.name);
+    state.tasks=state.tasks.filter(t=>t!==task);
+  } else {
+    const choice=selectChoice("刪除方式 / Cách xóa:\n1 = Chỉ ngày này\n2 = Từ ngày này trở đi (giữ lịch sử)\n3 = Toàn bộ chuỗi và lịch sử\n0 = Hủy",["1","2","3"]);
+    if(!choice)return;
+    if(choice==="1"){
+      putInTrash('occurrence',{taskId:task.id,date},taskName(task,date));
+      if(!task.excludedDates.includes(date))task.excludedDates.push(date);
+    } else if(choice==="2"){
+      if(!confirm("保留之前的歷史並停止未來重複？\nGiữ lịch sử trước ngày này và dừng các lần sau?"))return;
+      putInTrash('future',{taskId:task.id,oldEnd:task.endDate,date},task.name);
+      task.endDate=shiftDate(date,-1);
+      // Retain historical records, including completion history, without deleting data.
+    } else {
+      if(!confirm("將刪除全部紀錄！ / Xóa toàn bộ chuỗi và lịch sử?"))return;
+      putInTrash('task',task,task.name);
+      state.tasks=state.tasks.filter(t=>t!==task);
     }
   }
-
-  save();
-  refreshTasks();
+  if(save())refreshTaskViews();
 }
-
-function createTaskRow(task, key, compact = false) {
-  const done = isTaskDone(task, key);
-
-  const row = document.createElement("div");
-  row.className = "task" + (done ? " done" : "");
-  styleRow(row);
-
-  const checkbox = document.createElement("input");
-  checkbox.type = "checkbox";
-  checkbox.checked = done;
-
-  checkbox.onchange = () => {
-    setTaskDone(task, key, checkbox.checked);
-  };
-
-  const label = document.createElement("span");
-  label.textContent = taskName(task, key);
-  label.style.flex = "1";
-  label.style.minWidth = "100px";
-
-  if (done) {
-    label.style.textDecoration = "line-through";
-    label.style.opacity = "0.6";
-  }
-
-  const star = makeButton(
-    taskImportant(task, key) ? "★" : "☆",
-    () => {
-      if (task.repeat === "none") {
-        task.important = !task.important;
-      } else {
-        task.overrides[key] = {
-          ...task.overrides[key],
-          important: !taskImportant(task, key)
-        };
-      }
-
-      save();
-      refreshTasks();
-    },
-    "goal-star" +
-      (taskImportant(task, key) ? " starred" : "")
-  );
-
-  row.append(checkbox, label, star);
-
-  if (!compact) {
-    row.append(
-      makeButton("編輯 / Sửa", () => editTask(task, key)),
-      makeButton("X", () => deleteTask(task, key))
-    );
-  }
-
+function createTaskRow(task,key){
+  const row=document.createElement("div");row.className="task"+(isTaskDone(task,key)?" done":"");
+  Object.assign(row.style,{display:"flex",alignItems:"center",flexWrap:"wrap",gap:"10px"});
+  const check=document.createElement("input");check.type="checkbox";check.checked=isTaskDone(task,key);
+  check.onchange=()=>setTaskDone(task,key,check.checked);
+  const label=document.createElement("span");label.textContent=taskName(task,key);label.style.flex="1";
+  if(check.checked){label.style.textDecoration="line-through";label.style.opacity=".6";}
+  const star=makeButton(taskImportant(task,key)?"★":"☆",()=>{
+    if(task.repeat==="none")task.important=!task.important;
+    else task.overrides[key]={...task.overrides[key],important:!taskImportant(task,key)};
+    if(save())refreshTaskViews();
+  },"goal-star"+(taskImportant(task,key)?" starred":""));
+  const status=taskStatus(task,key);
+  if(status==='skipped') label.style.opacity='.55';
+  const details=document.createElement('small');
+  const completed=task.completedAt?.[taskOrigin(task,key)];
+  const goal=Object.values(state.goalLists).flat().find(g=>g.id===taskGoal(task,key));
+  details.textContent=[status==='skipped'?'已略過 / Đã bỏ qua':'',completed?'實際完成 / Hoàn thành: '+new Date(completed).toLocaleString('vi-VN'):'',taskNotes(task,key),goal?'🎯 '+goal.name:''].filter(Boolean).join(' · ');
+  details.style.flexBasis='100%';details.style.opacity='.7';
+  row.append(check,label,star,makeButton('略過 / Bỏ qua',()=>skipTask(task,key)),
+    makeButton('移動 / Dời',()=>moveTask(task,key)),makeButton("編輯 / Sửa",()=>editTask(task,key)),makeButton("X",()=>deleteTask(task,key)),details);
   return row;
 }
-
-// =====================================
-// 7. HOME TASKS
-// =====================================
-
-function renderTasks() {
-  const container = $("taskList");
-  container.replaceChildren();
-
-  const key = todayKey();
-  const tasks = getTasksForDate(key);
-
-  if (!tasks.length) {
-    container.append(
-      emptyMessage(
-        "今日尚無待辦事項 / Hôm nay chưa có công việc"
-      )
-    );
-  }
-
-  tasks.forEach(task => {
-    container.append(createTaskRow(task, key));
-  });
+function renderTasks(){
+  const box=$("taskList");box.replaceChildren();const key=todayKey();const tasks=getTasksForDate(key);
+  if(!tasks.length)box.append(emptyMessage("今日尚無待辦事項 / Hôm nay chưa có công việc"));
+  tasks.forEach(t=>box.append(createTaskRow(t,key)));
 }
-
-function addTask() {
-  selectedTaskDate = todayKey();
-  navigate("tasks");
-  renderScheduleTasks();
-
-  showTaskForm(
-    $("scheduleTaskList"),
-    selectedTaskDate
-  );
-}
-
-$("addTask").onclick = addTask;
-
-// =====================================
-// 8. OVERDUE TASKS
-// =====================================
-
-/*
-  Overdue means an occurrence before today
-  that has not been completed.
-
-  Maximum scan window: 20,000 days per task.
-  The interface initially displays 50 records.
-*/
-
-const OVERDUE_SCAN_LIMIT = 20000;
-let overdueExpanded = false;
-
-function getOverdueTasks() {
-  const today = todayKey();
-  const results = [];
-  let scanTruncated = false;
-
-  for (const task of state.tasks) {
-    if (!validDate(task.date) || task.date >= today) {
-      continue;
+function getOverdueTasks(){
+  const result=[],today=todayKey();let truncated=false;
+  for(const task of state.tasks){
+    if(!validDate(task.date)||task.date>=today)continue;
+    let key=task.date,count=0;
+    while(key<today&&count<20000){
+      if(taskOccursOn(task,key)&&taskStatus(task,key)==='pending')result.push({task,key});
+      key=shiftDate(key,1);count++;
+      if(task.endDate&&key>task.endDate)break;
+      if(task.repeat==="none")break;
     }
-
-    let cursor = task.date;
-    let checked = 0;
-
-    while (cursor < today && checked < OVERDUE_SCAN_LIMIT) {
-      if (
-        taskOccursOn(task, cursor) &&
-        !isTaskDone(task, cursor)
-      ) {
-        results.push({ task, date: cursor });
-      }
-
-      cursor = addDays(cursor, 1);
-      checked++;
-    }
-
-    if (cursor < today) scanTruncated = true;
+    if(count>=20000&&key<today)truncated=true;
   }
-
-  results.sort((a, b) =>
-    b.date.localeCompare(a.date)
-  );
-
-  return { results, scanTruncated };
+  result.sort((a,b)=>b.key.localeCompare(a.key));return {result,truncated};
 }
-
-function renderOverdue(container) {
-  const { results, scanTruncated } = getOverdueTasks();
-
-  const section = document.createElement("section");
-  section.style.marginTop = "24px";
-
-  const heading = document.createElement("h3");
-  heading.textContent =
-    `逾期待辦 / Công việc quá hạn (${results.length})`;
-
-  section.append(heading);
-
-  if (scanTruncated) {
-    const warning = emptyMessage(
-      "部分非常久遠的紀錄未統計。" +
-      " / Một số lịch sử quá xa chưa được thống kê."
-    );
-    section.append(warning);
-  }
-
-  if (!results.length) {
-    section.append(
-      emptyMessage(
-        "沒有逾期待辦 / Không có công việc quá hạn"
-      )
-    );
-  }
-
-  const visible = overdueExpanded
-    ? results
-    : results.slice(0, 50);
-
-  visible.forEach(({ task, date }) => {
-    const row = document.createElement("div");
-    row.className = "task";
-    styleRow(row);
-
-    const label = document.createElement("span");
-    label.style.flex = "1";
-    label.textContent =
-      `${date} — ${taskName(task, date)}`;
-
-    const done = makeButton("完成 / Xong", () => {
-      setTaskDone(task, date, true);
-    });
-
-    const view = makeButton("查看 / Xem", () => {
-      selectedTaskDate = date;
-      renderScheduleTasks();
-    });
-
-    row.append(label, done, view);
+let showAllOverdue=false;
+function renderOverdue(container){
+  const {result,truncated}=getOverdueTasks();
+  const section=document.createElement("section");section.style.marginTop="24px";
+  const h=document.createElement("h3");h.textContent=`逾期待辦 / Công việc quá hạn (${result.length}${truncated?"+":""})`;section.append(h);
+  if(truncated)section.append(emptyMessage("部分很久以前的資料未統計 / Lịch sử quá xa chưa thống kê hết."));
+  if(!result.length)section.append(emptyMessage("沒有逾期待辦 / Không có việc quá hạn"));
+  (showAllOverdue?result:result.slice(0,50)).forEach(({task,key})=>{
+    const row=document.createElement("div");row.className="task";
+    const label=document.createElement("span");label.textContent=`${key} — ${taskName(task,key)} `;
+    row.append(label,makeButton("完成 / Xong",()=>setTaskDone(task,key,true)),makeButton("略過 / Bỏ qua",()=>skipTask(task,key)),makeButton("查看 / Xem",()=>{selectedTaskDate=key;renderScheduleTasks();}));
     section.append(row);
   });
-
-  if (results.length > 50) {
-    section.append(
-      makeButton(
-        overdueExpanded
-          ? "收起 / Thu gọn"
-          : "顯示全部 / Hiện tất cả",
-        () => {
-          overdueExpanded = !overdueExpanded;
-          renderScheduleTasks();
-        }
-      )
-    );
-  }
-
+  if(result.length>50)section.append(makeButton(showAllOverdue?"收起 / Thu gọn":"顯示全部 / Hiện tất cả",()=>{showAllOverdue=!showAllOverdue;renderScheduleTasks();}));
   container.append(section);
 }
-
-// =====================================
-// 9. TASK MANAGEMENT
-// =====================================
-
-function renderScheduleTasks() {
-  const container = $("scheduleTaskList");
-  if (!container) return;
-
-  container.replaceChildren();
-
-  const toolbar = document.createElement("div");
-  styleRow(toolbar);
-  toolbar.style.marginBottom = "16px";
-
-  const dateField = makeField(
-    "選擇日期 / Chọn ngày",
-    "date",
-    selectedTaskDate
-  );
-
-  dateField.input.onchange = () => {
-    if (!validDate(dateField.input.value)) return;
-
-    selectedTaskDate = dateField.input.value;
-    renderScheduleTasks();
-  };
-
-  const today = makeButton(
-    "今天 / Hôm nay",
-    () => {
-      selectedTaskDate = todayKey();
-      renderScheduleTasks();
-    }
-  );
-
-  const add = makeButton(
-    "新增待辦 / Thêm công việc",
-    () => showTaskForm(container, selectedTaskDate),
-    "primary"
-  );
-
-  toolbar.append(dateField.label, today, add);
-  container.append(toolbar);
-
-  const tasks = getTasksForDate(selectedTaskDate);
-
-  if (!tasks.length) {
-    container.append(
-      emptyMessage(
-        "此日期尚無待辦事項 / Ngày này chưa có công việc"
-      )
-    );
-  }
-
-  tasks.forEach(task => {
-    container.append(
-      createTaskRow(task, selectedTaskDate)
-    );
-  });
-
-  const completed = tasks.filter(
-    task => isTaskDone(task, selectedTaskDate)
-  ).length;
-
-  const summary = document.createElement("p");
-  summary.className = "goal-summary";
-  summary.textContent =
-    `已完成 / Hoàn thành: ${completed} / ${tasks.length}`;
-
-  container.append(summary);
-  renderOverdue(container);
+function renderScheduleTasks(){
+  const box=$("scheduleTaskList");if(!box)return;box.replaceChildren();
+  const bar=document.createElement("div");Object.assign(bar.style,{display:"flex",gap:"10px",flexWrap:"wrap",marginBottom:"16px"});
+  const date=makeField("選擇日期 / Chọn ngày","date",selectedTaskDate);
+  date.input.onchange=()=>{if(validDate(date.input.value)){selectedTaskDate=date.input.value;renderScheduleTasks();}};
+  bar.append(date.label,makeButton("今天 / Hôm nay",()=>{selectedTaskDate=todayKey();renderScheduleTasks();}),makeButton("新增待辦 / Thêm công việc",()=>makeTaskEditor(box,selectedTaskDate),"primary"));
+  box.append(bar);
+  const tasks=getTasksForDate(selectedTaskDate);
+  if(!tasks.length)box.append(emptyMessage("此日期尚無待辦事項 / Ngày này chưa có công việc"));
+  tasks.forEach(t=>box.append(createTaskRow(t,selectedTaskDate)));
+  const done=tasks.filter(t=>isTaskDone(t,selectedTaskDate)).length;
+  const p=document.createElement("p");p.className="goal-summary";p.textContent=`已完成 / Hoàn thành: ${done} / ${tasks.length}`;box.append(p);
+  renderOverdue(box);renderTaskSearch(box);
 }
-
-// =====================================
-// 10. CALENDAR
-// =====================================
-
-function renderCalendar() {
-  $("monthTitle").textContent =
-    `${year} / ${pad(month + 1)}`;
-
-  $("weekdays").replaceChildren();
-
-  [
-    "週日/CN", "週一/T2", "週二/T3",
-    "週三/T4", "週四/T5", "週五/T6",
-    "週六/T7"
-  ].forEach(text => {
-    const element = document.createElement("div");
-    element.textContent = text;
-    $("weekdays").append(element);
-  });
-
+function addTask(){selectedTaskDate=todayKey();navigate("tasks");renderScheduleTasks();makeTaskEditor($("scheduleTaskList"),selectedTaskDate);}
+$("addTask").onclick=addTask;
+function renderCalendar(){
+  $("monthTitle").textContent=`${year} / ${pad(month+1)}`;$("weekdays").replaceChildren();
+  ["週日/CN","週一/T2","週二/T3","週三/T4","週四/T5","週五/T6","週六/T7"].forEach(t=>{const e=document.createElement("div");e.textContent=t;$("weekdays").append(e);});
+  const first=new Date(year,month,1).getDay(),len=new Date(year,month+1,0).getDate();
+  const weekMode=localStorage.getItem('cozy-calendar-view')==='week';
+  const selectedDt=parseDate(selected)||new Date();
+  const weekStart=new Date(selectedDt);weekStart.setDate(weekStart.getDate()-weekStart.getDay());
+  const cells=weekMode?7:Math.ceil((first+len)/7)*7;
   $("days").replaceChildren();
-
-  const first = new Date(year, month, 1).getDay();
-  const length = new Date(year, month + 1, 0).getDate();
-  const cells = Math.ceil((first + length) / 7) * 7;
-
-  for (let i = 0; i < cells; i++) {
-    const dt = new Date(year, month, i - first + 1);
-    const key = dateKey(dt);
-
-    const cell = document.createElement("button");
-    cell.type = "button";
-
-    cell.className =
-      "day" +
-      (dt.getMonth() !== month ? " muted" : "") +
-      (key === selected ? " selected" : "");
-
-    const number = document.createElement("span");
-    number.className = "num";
-    number.textContent = dt.getDate();
-
-    cell.append(number);
-
-    const events = state.events.filter(
-      event => event.date === key
-    );
-
-    events.slice(0, 2).forEach(event => {
-      const chip = document.createElement("span");
-      chip.className = "chip";
-      chip.textContent =
-        `${event.time || ""} ${event.name || ""}`;
-      cell.append(chip);
-    });
-
-    const tasks = getTasksForDate(key);
-
-    if (tasks.length) {
-      const chip = document.createElement("span");
-      chip.className = "chip";
-
-      const completed = tasks.filter(
-        task => isTaskDone(task, key)
-      ).length;
-
-      chip.textContent =
-        `待辦 ${completed}/${tasks.length}`;
-
-      cell.append(chip);
-    }
-
-    cell.onclick = () => {
-      selected = key;
-      year = dt.getFullYear();
-      month = dt.getMonth();
-      renderCalendar();
-    };
-
-    $("days").append(cell);
+  for(let i=0;i<cells;i++){
+    const dt=weekMode?new Date(weekStart.getFullYear(),weekStart.getMonth(),weekStart.getDate()+i):new Date(year,month,i-first+1),key=dateKey(dt),button=document.createElement("button");button.type="button";
+    button.className="day"+(dt.getMonth()!==month?" muted":"")+(key===selected?" selected":"");
+    const num=document.createElement("span");num.className="num";num.textContent=dt.getDate();button.append(num);
+    state.events.filter(e=>e.date===key).slice(0,2).forEach(e=>{const chip=document.createElement("span");chip.className="chip";chip.textContent=`${e.time||""} ${e.name||""}`;button.append(chip);});
+    const tasks=getTasksForDate(key);
+    if(tasks.length){const chip=document.createElement("span");chip.className="chip";chip.textContent=`待辦 ${tasks.filter(t=>isTaskDone(t,key)).length}/${tasks.length}`;button.append(chip);}
+    button.onclick=()=>{selected=key;year=dt.getFullYear();month=dt.getMonth();renderCalendar();};$("days").append(button);
   }
-
   renderEvents();
+  let toggle=$('cozyWeekToggle');
+  if(!toggle){toggle=makeButton('',()=>{localStorage.setItem('cozy-calendar-view',localStorage.getItem('cozy-calendar-view')==='week'?'month':'week');renderCalendar();});toggle.id='cozyWeekToggle';$('monthTitle').parentElement.append(toggle);}
+  toggle.textContent=weekMode?'月曆 / Xem tháng':'週曆 / Xem tuần';
 }
-
-// =====================================
-// 11. CALENDAR EVENTS AND DAILY TASKS
-// =====================================
-
-function renderEvents() {
-  const container = $("eventList");
-  container.replaceChildren();
-
-  $("selectedTitle").textContent =
-    `${selected} 行程與待辦 / Lịch và công việc`;
-
-  const events = state.events
-    .filter(event => event.date === selected)
-    .sort((a, b) =>
-      String(a.time || "").localeCompare(
-        String(b.time || "")
-      )
-    );
-
-  const eventHeading = document.createElement("h3");
-  eventHeading.textContent = "行程 / Sự kiện";
-  container.append(eventHeading);
-
-  if (!events.length) {
-    container.append(
-      emptyMessage("尚無行程 / Chưa có sự kiện")
-    );
-  }
-
-  events.forEach(event => {
-    const row = document.createElement("div");
-    row.className = "event";
-    styleRow(row);
-
-    const label = document.createElement("span");
-    label.style.flex = "1";
-    label.textContent =
-      `${event.time || ""} — ${event.name || ""}`;
-
-    const edit = makeButton(
-      "編輯 / Sửa",
-      () => openEventEditor(event)
-    );
-
-    const remove = makeButton("X", () => {
-      if (!confirm(
-        "刪除此行程？ / Xóa sự kiện này?"
-      )) return;
-
-      state.events = state.events.filter(
-        item => item !== event
-      );
-
-      save();
-      renderCalendar();
-    });
-
-    row.append(label, edit, remove);
-    container.append(row);
+let editingEvent=null;
+function openEventEditor(event=null){editingEvent=event;$("eventForm").reset();$("eventName").value=event?.name||"";$("eventDate").value=event?.date||selected;$("eventTime").value=event?.time||"";
+  let notes=$('cozyEventNotes');
+  if(!notes){const field=makeField('備註 / Ghi chú','text');notes=field.input;notes.id='cozyEventNotes';$('eventForm').append(field.label);}
+  notes.value=event?.notes||'';$('editor').showModal();}
+function renderEvents(){
+  $("selectedTitle").textContent=`${selected} 行程與待辦 / Lịch và công việc`;
+  const box=$("eventList");box.replaceChildren();
+  const h=document.createElement("h3");h.textContent="行程 / Sự kiện";box.append(h);
+  const events=state.events.filter(e=>e.date===selected).sort((a,b)=>String(a.time||"").localeCompare(String(b.time||"")));
+  if(!events.length)box.append(emptyMessage("尚無行程 / Chưa có sự kiện"));
+  events.forEach(e=>{
+    const row=document.createElement("div");row.className="event";row.style.display="flex";row.style.gap="10px";
+    const label=document.createElement("span");label.textContent=`${e.time||""} — ${e.name||""}${e.notes?" · "+e.notes:""}`;label.style.flex="1";
+    row.append(label,makeButton("編輯 / Sửa",()=>openEventEditor(e)),makeButton("X",()=>{
+      if(!confirm("刪除此行程？ / Xóa sự kiện?"))return;
+      putInTrash('event',e,e.name);state.events=state.events.filter(x=>x!==e);if(save())renderCalendar();
+    }));box.append(row);
   });
-
-  const taskHeading = document.createElement("h3");
-  taskHeading.textContent = "待辦事項 / Công việc";
-  taskHeading.style.marginTop = "16px";
-  container.append(taskHeading);
-
-  const tasks = getTasksForDate(selected);
-
-  if (!tasks.length) {
-    container.append(
-      emptyMessage("尚無待辦 / Chưa có công việc")
-    );
-  }
-
-  tasks.forEach(task => {
-    container.append(
-      createTaskRow(task, selected)
-    );
-  });
-
-  container.append(
-    makeButton(
-      "查看當日待辦 / Xem công việc ngày này",
-      () => {
-        selectedTaskDate = selected;
-        navigate("tasks");
-      }
-    )
-  );
+  const t=document.createElement("h3");t.textContent="待辦事項 / Công việc";box.append(t);
+  const tasks=getTasksForDate(selected);
+  if(!tasks.length)box.append(emptyMessage("尚無待辦 / Chưa có công việc"));
+  tasks.forEach(task=>box.append(createTaskRow(task,selected)));
+  box.append(makeButton("查看當日待辦 / Xem công việc ngày này",()=>{selectedTaskDate=selected;navigate("tasks");}));
 }
-
-// =====================================
-// 12. ADD / EDIT CALENDAR EVENTS
-// =====================================
-
-let editingEvent = null;
-
-function openEventEditor(event = null) {
-  editingEvent = event;
-
-  $("eventForm").reset();
-  $("eventName").value = event?.name || "";
-  $("eventDate").value = event?.date || selected;
-  $("eventTime").value = event?.time || "";
-
-  $("editor").showModal();
-}
-
-$("addEvent").onclick = () => openEventEditor();
-
-$("cancel").onclick = () => {
-  editingEvent = null;
-  $("editor").close();
-};
-
-$("editor").addEventListener("close", () => {
-  editingEvent = null;
-});
-
-$("eventForm").onsubmit = e => {
-  e.preventDefault();
-
-  if (!$("eventForm").reportValidity()) return;
-
-  const name = $("eventName").value.trim();
-  const date = $("eventDate").value;
-  const time = $("eventTime").value;
-
-  if (!name || !validDate(date)) {
-    alert("請確認資料 / Kiểm tra thông tin.");
-    return;
-  }
-
-  if (editingEvent) {
-    editingEvent.name = name;
-    editingEvent.date = date;
-    editingEvent.time = time;
-  } else {
-    state.events.push({
-      id: makeId(),
-      name,
-      date,
-      time
-    });
-  }
-
-  save();
-
-  selected = date;
-  year = Number(date.slice(0, 4));
-  month = Number(date.slice(5, 7)) - 1;
-
-  editingEvent = null;
-  $("editor").close();
+$("prev").onclick=()=>{
+  if(localStorage.getItem('cozy-calendar-view')==='week'){
+    selected=shiftDate(selected,-7);year=Number(selected.slice(0,4));month=Number(selected.slice(5,7))-1;
+  }else{month--;if(month<0){month=11;year--;}selected=`${year}-${pad(month+1)}-01`;}
   renderCalendar();
 };
-
-$("prev").onclick = () => {
-  month--;
-
-  if (month < 0) {
-    month = 11;
-    year--;
-  }
-
-  selected = `${year}-${pad(month + 1)}-01`;
+$("next").onclick=()=>{
+  if(localStorage.getItem('cozy-calendar-view')==='week'){
+    selected=shiftDate(selected,7);year=Number(selected.slice(0,4));month=Number(selected.slice(5,7))-1;
+  }else{month++;if(month>11){month=0;year++;}selected=`${year}-${pad(month+1)}-01`;}
   renderCalendar();
 };
-
-$("next").onclick = () => {
-  month++;
-
-  if (month > 11) {
-    month = 0;
-    year++;
-  }
-
-  selected = `${year}-${pad(month + 1)}-01`;
-  renderCalendar();
+$("addEvent").onclick=()=>openEventEditor();
+$("cancel").onclick=()=>{editingEvent=null;$("editor").close();};
+$("editor").addEventListener("close",()=>{editingEvent=null;});
+$("eventForm").onsubmit=e=>{
+  e.preventDefault();if(!$("eventForm").reportValidity())return;
+  const name=$("eventName").value.trim(),date=$("eventDate").value,time=$("eventTime").value;
+  if(!name||!validDate(date)){alert("資料不正確 / Thông tin không hợp lệ.");return;}
+  const notes=$('cozyEventNotes')?.value||'';
+  if(editingEvent)Object.assign(editingEvent,{name,date,time,notes});
+  else state.events.push({id:makeId(),name,date,time,notes});
+  if(!save())return;
+  selected=date;year=Number(date.slice(0,4));month=Number(date.slice(5,7))-1;
+  editingEvent=null;$("editor").close();renderCalendar();
 };
 
-// =====================================
-// 13. GOAL MANAGEMENT
-// =====================================
+// ==========================================
+// 8. MỤC TIÊU THEO NGÀY / THÁNG / NĂM
+// ==========================================
 
 function getGoals(type, key = viewing[type]) {
   return state.goalLists[type].filter(
@@ -1301,30 +680,35 @@ function getGoals(type, key = viewing[type]) {
 
 function renderGoalPeriodPicker(manager) {
   const row = document.createElement("div");
-  styleRow(row);
+  row.style.display = "flex";
+  row.style.flexWrap = "wrap";
+  row.style.alignItems = "center";
+  row.style.gap = "10px";
   row.style.margin = "14px 0";
 
-  const type = activeGoalType;
+  const label = document.createElement("label");
+  label.textContent = "選擇日期 / Chọn thời gian: ";
 
-  const field = makeField(
-    "選擇時間 / Chọn thời gian",
-    type === "day"
+  const input = document.createElement("input");
+
+  input.type =
+    activeGoalType === "day"
       ? "date"
-      : type === "month"
+      : activeGoalType === "month"
         ? "month"
-        : "number",
-    viewing[type]
-  );
+        : "number";
 
-  if (type === "year") {
-    field.input.min = "1900";
-    field.input.max = "9999";
-    field.input.step = "1";
-    field.input.style.width = "110px";
+  input.value = viewing[activeGoalType];
+
+  if (activeGoalType === "year") {
+    input.min = "1900";
+    input.max = "9999";
+    input.step = "1";
+    input.style.width = "110px";
   }
 
-  field.input.onchange = () => {
-    const value = field.input.value;
+  input.onchange = () => {
+    const value = input.value;
 
     const patterns = {
       day: /^\d{4}-\d{2}-\d{2}$/,
@@ -1332,22 +716,25 @@ function renderGoalPeriodPicker(manager) {
       year: /^\d{4}$/
     };
 
-    if (!patterns[type].test(value)) return;
-    if (type === "day" && !validDate(value)) return;
+    if (!patterns[activeGoalType].test(value)) {
+      input.value = viewing[activeGoalType];
+      return;
+    }
 
-    viewing[type] = value;
+    viewing[activeGoalType] = value;
     renderGoals();
   };
 
   const reset = makeButton(
     "今天 / Hiện tại",
     () => {
-      viewing[type] = periodKey(type);
+      viewing[activeGoalType] = periodKey(activeGoalType);
       renderGoals();
     }
   );
 
-  row.append(field.label, reset);
+  label.append(input);
+  row.append(label, reset);
   manager.append(row);
 }
 
@@ -1357,13 +744,12 @@ function renderGoals() {
 
   manager.replaceChildren();
 
-  document.querySelectorAll("[data-goal-type]")
-    .forEach(button => {
-      button.classList.toggle(
-        "active",
-        button.dataset.goalType === activeGoalType
-      );
-    });
+  document.querySelectorAll("[data-goal-type]").forEach(button => {
+    button.classList.toggle(
+      "active",
+      button.dataset.goalType === activeGoalType
+    );
+  });
 
   const title = document.createElement("h2");
   title.textContent = goalTypes[activeGoalType];
@@ -1374,10 +760,7 @@ function renderGoals() {
   const add = makeButton(
     "新增目標 / Thêm mục tiêu",
     () => {
-      const name = prompt(
-        "目標名稱 / Nhập tên mục tiêu"
-      );
-
+      const name = prompt("目標名稱 / Nhập tên mục tiêu");
       if (!name?.trim()) return;
 
       state.goalLists[activeGoalType].push({
@@ -1402,7 +785,7 @@ function renderGoals() {
   if (!goals.length) {
     manager.append(
       emptyMessage(
-        "尚未建立目標 / Chưa có mục tiêu"
+        "尚未建立目標 / Chưa có mục tiêu cho thời gian này"
       )
     );
   }
@@ -1429,16 +812,17 @@ function renderGoals() {
         save();
         refreshGoals();
       },
-      "goal-star" +
-        (goal.important ? " starred" : "")
+      "goal-star" + (goal.important ? " starred" : "")
     );
+
+    star.title = "重要目標 / Mục tiêu quan trọng";
 
     const name = document.createElement("span");
     name.className =
       "goal-name" + (goal.done ? " completed" : "");
     name.textContent = goal.name;
 
-    const edit = makeButton("編輯 / Sửa", () => {
+    const edit = makeButton("Sửa", () => {
       const value = prompt(
         "修改目標 / Sửa mục tiêu",
         goal.name
@@ -1452,10 +836,9 @@ function renderGoals() {
     });
 
     const remove = makeButton("X", () => {
-      if (!confirm(
-        "確定刪除？ / Chắc chắn xóa?"
-      )) return;
+      if (!confirm("確定刪除？ / Chắc chắn xóa?")) return;
 
+      putInTrash('goal',{...goal,goalType:activeGoalType},goal.name);
       state.goalLists[activeGoalType] =
         state.goalLists[activeGoalType].filter(
           item => item !== goal
@@ -1469,9 +852,7 @@ function renderGoals() {
     manager.append(card);
   });
 
-  const completed = goals.filter(
-    goal => goal.done
-  ).length;
+  const completed = goals.filter(goal => goal.done).length;
 
   const summary = document.createElement("p");
   summary.className = "goal-summary";
@@ -1481,17 +862,16 @@ function renderGoals() {
   manager.append(summary);
 }
 
-document.querySelectorAll("[data-goal-type]")
-  .forEach(button => {
-    button.onclick = () => {
-      activeGoalType = button.dataset.goalType;
-      renderGoals();
-    };
-  });
+document.querySelectorAll("[data-goal-type]").forEach(button => {
+  button.onclick = () => {
+    activeGoalType = button.dataset.goalType;
+    renderGoals();
+  };
+});
 
-// =====================================
-// 14. IMPORTANT GOALS ON HOME
-// =====================================
+// ==========================================
+// 9. MỤC TIÊU QUAN TRỌNG TRANG CHỦ
+// ==========================================
 
 function renderImportantGoals() {
   const list = $("importantGoalList");
@@ -1542,9 +922,9 @@ function renderImportantGoals() {
   }
 }
 
-// =====================================
-// 15. PERFORMANCE
-// =====================================
+// ==========================================
+// 10. BIỂU ĐỒ HIỆU SUẤT MỤC TIÊU
+// ==========================================
 
 function goalStats(type, key = periodKey(type)) {
   const goals = getGoals(type, key);
@@ -1623,19 +1003,23 @@ function refreshGoals() {
   renderPerformance();
 }
 
-// =====================================
-// 16. AUTOMATIC DATE ROLLOVER
-// =====================================
+// ==========================================
+// 11. TỰ ĐỘNG CẬP NHẬT NGÀY MỚI
+// ==========================================
 
 let lastToday = todayKey();
 
 function checkDateRollover() {
   const current = todayKey();
+
   if (current === lastToday) return;
 
   const previous = lastToday;
   lastToday = current;
 
+  // Nếu đang xem ngày hôm qua thì tự chuyển
+  // sang hôm nay. Nếu đang xem ngày khác
+  // do tự chọn thì giữ nguyên.
   if (selectedTaskDate === previous) {
     selectedTaskDate = current;
   }
@@ -1671,11 +1055,111 @@ document.addEventListener("visibilitychange", () => {
 
 window.addEventListener("focus", checkDateRollover);
 
-setInterval(checkDateRollover, 60000);
+setInterval(checkDateRollover, 60 * 1000);
 
-// =====================================
-// 17. INITIALIZE
-// =====================================
+
+// ==========================================
+// EXTRA: FILTER, REMINDERS, TRASH, BACKUP
+// ==========================================
+let taskSearch='',taskFilter='all',taskSort='important';
+function renderTaskSearch(box) {
+  const section=document.createElement('section');section.style.marginTop='22px';
+  const h=document.createElement('h3');h.textContent='搜尋與篩選 / Tìm kiếm và lọc';section.append(h);
+  const search=makeField('關鍵字 / Từ khóa','search',taskSearch);
+  const results=document.createElement('div');
+  const filter=document.createElement('select');
+  [['all','全部 / Tất cả'],['pending','未完成 / Chưa xong'],['done','完成 / Đã xong'],['skipped','略過 / Bỏ qua'],['important','★ 重要 / Quan trọng']].forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;filter.append(o);});
+  filter.value=taskFilter;
+  const sort=document.createElement('select');
+  [['important','★ 優先 / Quan trọng'],['date','日期 / Ngày'],['status','狀態 / Trạng thái']].forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;sort.append(o);});
+  sort.value=taskSort;
+  function draw(){
+    results.replaceChildren();const key=selectedTaskDate;
+    const list=getTasksForDate(key).filter(t=>(!taskSearch||taskName(t,key).toLowerCase().includes(taskSearch.toLowerCase())) &&
+      (taskFilter==='all'||(taskFilter==='important'?taskImportant(t,key):taskStatus(t,key)===taskFilter)));
+    if(taskSort==='status')list.sort((a,b)=>taskStatus(a,key).localeCompare(taskStatus(b,key)));
+    if(taskSort==='date')list.sort((a,b)=>a.date.localeCompare(b.date));
+    if(!list.length)results.append(emptyMessage('沒有符合的待辦 / Không có kết quả'));
+    list.forEach(t=>results.append(createTaskRow(t,key)));
+  }
+  search.input.oninput=()=>{taskSearch=search.input.value;draw();};
+  filter.onchange=()=>{taskFilter=filter.value;draw();};
+  sort.onchange=()=>{taskSort=sort.value;draw();};
+  section.append(search.label,filter,sort,results);box.append(section);draw();
+}
+function exportBackup(){
+  const blob=new Blob([JSON.stringify({format:'cozy-life-planner',version:2,exportedAt:new Date().toISOString(),data:state},null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`cozy-backup-${todayKey()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function importBackup(file){
+  if(!file)return;
+  file.text().then(raw=>{
+    const parsed=JSON.parse(raw),data=parsed?.format==='cozy-life-planner'?parsed.data:parsed;
+    if(!data||!Array.isArray(data.tasks)||!Array.isArray(data.events)||!data.goalLists||!['day','month','year'].every(k=>Array.isArray(data.goalLists[k])))throw Error('Invalid format');
+    if(!confirm('將覆蓋目前資料，請先匯出備份。\nNhập sẽ thay dữ liệu hiện tại. Hãy xuất sao lưu trước.'))return;
+    const previous=state;state=data;
+    if(!save()){state=previous;return;}
+    location.reload();
+  }).catch(()=>alert('檔案格式錯誤 / File sao lưu không hợp lệ.'));
+}
+function renderTrash(){
+  const root=$('cozyTrash');if(!root)return;root.replaceChildren();
+  const title=document.createElement('h3');title.textContent=`資料回收桶 / Thùng rác (${state.trash.length})`;root.append(title);
+  state.trash.forEach(entry=>{
+    const row=document.createElement('div');row.className='task';
+    const label=document.createElement('span');label.textContent=`${entry.label} · ${entry.deletedAt.slice(0,10)}`;
+    const restore=makeButton('還原 / Khôi phục',()=>{
+      const item=entry.payload;
+      if(entry.type==='task'){
+        if(state.tasks.some(t=>t.id===item.id)){alert('資料已存在 / Đã tồn tại.');return;}
+        state.tasks.push(item);
+      } else if(entry.type==='event'){
+        if(state.events.some(e=>e.id===item.id)){alert('資料已存在 / Đã tồn tại.');return;}
+        state.events.push(item);
+      } else if(entry.type==='goal'){
+        const type=item.goalType;if(!state.goalLists[type]||state.goalLists[type].some(g=>g.id===item.id))return;
+        const goal={...item};delete goal.goalType;state.goalLists[type].push(goal);
+      } else {
+        const task=state.tasks.find(t=>t.id===item.taskId);if(!task){alert('找不到原工作 / Không còn công việc gốc.');return;}
+        if(entry.type==='occurrence')task.excludedDates=task.excludedDates.filter(d=>d!==item.date);
+        if(entry.type==='future')task.endDate=item.oldEnd;
+      }
+      state.trash=state.trash.filter(x=>x.id!==entry.id);if(save()){renderTrash();refreshTaskViews();refreshGoals();}
+    });
+    const purge=makeButton('永久刪除 / Xóa vĩnh viễn',()=>{if(!confirm('無法還原！ / Không thể khôi phục!'))return;state.trash=state.trash.filter(x=>x.id!==entry.id);if(save())renderTrash();});
+    row.append(label,restore,purge);root.append(row);
+  });
+}
+function initSafetyPanel(){
+  const parent=$('settingsPage')||$('schedulePage');if(!parent)return;
+  const panel=document.createElement('section');panel.style.padding='16px';panel.style.margin='16px 0';
+  const h=document.createElement('h3');h.textContent='資料管理 / Quản lý dữ liệu';panel.append(h);
+  panel.append(makeButton('匯出備份 JSON / Xuất sao lưu',exportBackup));
+  const picker=document.createElement('input');picker.type='file';picker.accept='.json,application/json';picker.onchange=()=>importBackup(picker.files[0]);panel.append(picker);
+  const trash=document.createElement('div');trash.id='cozyTrash';panel.append(trash);parent.append(panel);renderTrash();
+}
+const reminderSeen=new Set();
+function checkReminders(){
+  if(document.hidden)return;
+  const now=Date.now();
+  for(const task of state.tasks){
+    const keys=new Set([todayKey(),...Object.values(task.moved||{})]);
+    for(const key of keys){
+      if(!taskOccursOn(task,key)||taskStatus(task,key)!=='pending')continue;
+      const time=taskReminder(task,key);if(!time)continue;
+      const scheduled=task.repeat==='none'?time:`${key}T${time.slice(11,16)}`;
+      const moment=new Date(scheduled).getTime();const id=`${task.id}:${key}:${time}`;
+      if(Number.isFinite(moment)&&moment<=now&&moment>now-60000&&!reminderSeen.has(id)){
+        reminderSeen.add(id);alert(`提醒 / Nhắc việc: ${taskName(task,key)}`);
+      }
+    }
+  }
+}
+initSafetyPanel();setInterval(checkReminders,30000);
+
+// ==========================================
+// 12. KHỞI ĐỘNG
+// ==========================================
 
 renderCalendar();
 renderTasks();

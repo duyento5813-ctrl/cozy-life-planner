@@ -1,43 +1,43 @@
 
-/*
-  Cozy Life Planner
-  Version 4 - Minimal Interface
-
-  5 mục lớn:
-  1. Trang chủ
-  2. Lịch trình
-  3. Thu chi
-  4. Hiệu suất
-  5. Cài đặt
-
-  Chỉ sử dụng ngôi sao để đánh dấu mục tiêu quan trọng.
-  Dữ liệu được lưu trong localStorage.
-*/
+/* Cozy Life Planner — mục tiêu theo ngày/tháng/năm thực tế */
 
 const $ = id => document.getElementById(id);
-
 const STORAGE_KEY = "cozy-planner-demo-v1";
 
 const pad = n => String(n).padStart(2, "0");
 
-function dateKey(date) {
-  return (
-    date.getFullYear() + "-" +
-    pad(date.getMonth() + 1) + "-" +
-    pad(date.getDate())
-  );
-}
+const dateKey = d =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-function makeId() {
-  return globalThis.crypto?.randomUUID?.() ||
-    `${Date.now()}-${Math.random()}`;
-}
+const monthKey = d => dateKey(d).slice(0, 7);
+const yearKey = d => String(d.getFullYear());
+
+const makeId = () =>
+  globalThis.crypto?.randomUUID?.() ||
+  `${Date.now()}-${Math.random()}`;
+
+const today = () => new Date();
+
+const periodKey = (type, d = today()) =>
+  type === "day"
+    ? dateKey(d)
+    : type === "month"
+      ? monthKey(d)
+      : yearKey(d);
+
+// ====================================
+// 1. DỮ LIỆU
+// ====================================
 
 let state;
 
 try {
   state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
 } catch {
+  state = {};
+}
+
+if (!state || typeof state !== "object" || Array.isArray(state)) {
   state = {};
 }
 
@@ -52,19 +52,34 @@ if (!state.goalLists || typeof state.goalLists !== "object") {
   state.goalLists = {};
 }
 
-for (const type of ["year", "month", "day"]) {
+for (const type of ["day", "month", "year"]) {
   if (!Array.isArray(state.goalLists[type])) {
     state.goalLists[type] = [];
   }
 }
 
-const now = new Date();
+function save() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.error(error);
+    alert("資料儲存失敗 / Không thể lưu dữ liệu.");
+  }
+}
 
-let year = now.getFullYear();
-let month = now.getMonth();
-let selected = dateKey(now);
+const initialDate = today();
+
+let year = initialDate.getFullYear();
+let month = initialDate.getMonth();
+let selected = dateKey(initialDate);
 
 let activeGoalType = "year";
+
+const viewing = {
+  day: periodKey("day"),
+  month: periodKey("month"),
+  year: periodKey("year")
+};
 
 const goalTypes = {
   year: "年度目標 / Mục tiêu năm",
@@ -72,43 +87,33 @@ const goalTypes = {
   day: "每日目標 / Mục tiêu ngày"
 };
 
-function save() {
-  try {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(state)
-    );
-  } catch (error) {
-    console.error("Lỗi lưu dữ liệu:", error);
-    alert("資料儲存失敗 / Không thể lưu dữ liệu.");
-  }
-}
-
 // ====================================
-// CHUYỂN ĐỔI DỮ LIỆU CŨ
+// 2. CHUYỂN DỮ LIỆU MỤC TIÊU CŨ
 // ====================================
 
 function migrateGoals() {
+  const migrationDate = today();
+
   for (const type of ["year", "month", "day"]) {
-    const oldValue = state.goals[type + "Goal"];
+    const items = state.goalLists[type];
+    const oldText = state.goals[type + "Goal"];
 
     if (
-      typeof oldValue === "string" &&
-      oldValue.trim() &&
-      !state.goalLists[type].some(
-        goal => goal.name === oldValue.trim()
-      )
+      !state.goalPeriodMigrationV1 &&
+      typeof oldText === "string" &&
+      oldText.trim() &&
+      !items.some(g => g.name === oldText.trim())
     ) {
-      state.goalLists[type].push({
+      items.push({
         id: makeId(),
-        name: oldValue.trim(),
+        name: oldText.trim(),
         done: false,
         progress: 0,
         important: false
       });
     }
 
-    state.goalLists[type].forEach(goal => {
+    for (const goal of items) {
       if (!goal.id) goal.id = makeId();
 
       if (typeof goal.important !== "boolean") {
@@ -119,17 +124,22 @@ function migrateGoals() {
         goal.done = Number(goal.progress) >= 100;
       }
 
+      if (!goal.period) {
+        goal.period = periodKey(type, migrationDate);
+      }
+
       goal.progress = goal.done ? 100 : 0;
-    });
+    }
   }
 
+  state.goalPeriodMigrationV1 = true;
   save();
 }
 
 migrateGoals();
 
 // ====================================
-// ĐIỀU HƯỚNG
+// 3. ĐIỀU HƯỚNG 5 MỤC LỚN
 // ====================================
 
 const pageMap = {
@@ -142,11 +152,6 @@ const pageMap = {
   settings: "settingsPage"
 };
 
-function hideScheduleDetails() {
-  $("scheduleTasks").hidden = true;
-  $("goalsPage").hidden = true;
-}
-
 function showPage(page) {
   const target = pageMap[page] ? page : "home";
 
@@ -155,29 +160,21 @@ function showPage(page) {
   });
 
   document.querySelectorAll("nav a[data-page]").forEach(link => {
-    const navPage = link.dataset.page;
-
     const active =
-      navPage === target ||
+      link.dataset.page === target ||
       (
-        navPage === "calendar" &&
+        link.dataset.page === "calendar" &&
         ["tasks", "goals"].includes(target)
       );
 
     link.classList.toggle("active", active);
   });
 
-  hideScheduleDetails();
+  $("scheduleTasks").hidden = target !== "tasks";
+  $("goalsPage").hidden = target !== "goals";
 
-  if (target === "tasks") {
-    $("scheduleTasks").hidden = false;
-    renderScheduleTasks();
-  }
-
-  if (target === "goals") {
-    $("goalsPage").hidden = false;
-    renderGoals();
-  }
+  if (target === "tasks") renderScheduleTasks();
+  if (target === "goals") renderGoals();
 
   if (target === "home") {
     renderCalendar();
@@ -202,21 +199,21 @@ function navigate(page) {
 }
 
 document.querySelectorAll("nav a[data-page]").forEach(link => {
-  link.onclick = event => {
+  link.addEventListener("click", event => {
     event.preventDefault();
     navigate(link.dataset.page);
-  };
+  });
 });
 
 document.querySelectorAll("[data-schedule-section]").forEach(link => {
-  link.onclick = event => {
+  link.addEventListener("click", event => {
     event.preventDefault();
     navigate(link.dataset.scheduleSection);
-  };
+  });
 });
 
 document.querySelectorAll("[data-back-schedule]").forEach(button => {
-  button.onclick = () => navigate("calendar");
+  button.addEventListener("click", () => navigate("calendar"));
 });
 
 window.addEventListener("hashchange", () => {
@@ -224,7 +221,7 @@ window.addEventListener("hashchange", () => {
 });
 
 // ====================================
-// LỊCH TRÌNH
+// 4. LỊCH TRÌNH
 // ====================================
 
 function renderCalendar() {
@@ -233,8 +230,13 @@ function renderCalendar() {
   $("weekdays").replaceChildren();
 
   [
-    "週日/CN", "週一/T2", "週二/T3",
-    "週三/T4", "週四/T5", "週五/T6", "週六/T7"
+    "週日/CN",
+    "週一/T2",
+    "週二/T3",
+    "週三/T4",
+    "週四/T5",
+    "週五/T6",
+    "週六/T7"
   ].forEach(day => {
     const element = document.createElement("div");
     element.textContent = day;
@@ -243,14 +245,12 @@ function renderCalendar() {
 
   const first = new Date(year, month, 1).getDay();
   const length = new Date(year, month + 1, 0).getDate();
-  const prevLength = new Date(year, month, 0).getDate();
   const cells = Math.ceil((first + length) / 7) * 7;
 
   $("days").replaceChildren();
 
   for (let i = 0; i < cells; i++) {
-    const day = i - first + 1;
-    const dt = new Date(year, month, day);
+    const dt = new Date(year, month, i - first + 1);
     const date = dateKey(dt);
 
     const button = document.createElement("button");
@@ -263,10 +263,7 @@ function renderCalendar() {
 
     const number = document.createElement("span");
     number.className = "num";
-
-    number.textContent =
-      day < 1 ? prevLength + day :
-      day > length ? day - length : day;
+    number.textContent = dt.getDate();
 
     button.append(number);
 
@@ -276,7 +273,9 @@ function renderCalendar() {
       .forEach(event => {
         const chip = document.createElement("span");
         chip.className = "chip";
-        chip.textContent = `${event.time} ${event.name}`;
+        chip.textContent =
+          `${event.time || ""} ${event.name || ""}`;
+
         button.append(chip);
       });
 
@@ -302,7 +301,7 @@ function renderEvents() {
   const events = state.events
     .filter(event => event.date === selected)
     .sort((a, b) =>
-      String(a.time).localeCompare(String(b.time))
+      String(a.time || "").localeCompare(String(b.time || ""))
     );
 
   if (!events.length) {
@@ -316,8 +315,9 @@ function renderEvents() {
     const row = document.createElement("div");
     row.className = "event";
 
-    const name = document.createElement("span");
-    name.textContent = `${event.time} — ${event.name}`;
+    const label = document.createElement("span");
+    label.textContent =
+      `${event.time || ""} — ${event.name || ""}`;
 
     const remove = document.createElement("button");
     remove.type = "button";
@@ -327,15 +327,13 @@ function renderEvents() {
     remove.onclick = () => {
       if (!confirm("刪除此行程？ / Xóa lịch này?")) return;
 
-      state.events = state.events.filter(
-        item => item.id !== event.id
-      );
+      state.events = state.events.filter(item => item !== event);
 
       save();
       renderCalendar();
     };
 
-    row.append(name, remove);
+    row.append(label, remove);
     $("eventList").append(row);
   });
 }
@@ -398,7 +396,7 @@ $("eventForm").onsubmit = event => {
 };
 
 // ====================================
-// VIỆC CẦN LÀM
+// 5. VIỆC CẦN LÀM
 // ====================================
 
 function createTaskRow(task) {
@@ -427,9 +425,7 @@ function createTaskRow(task) {
   remove.onclick = () => {
     if (!confirm("刪除此工作？ / Xóa công việc này?")) return;
 
-    state.tasks = state.tasks.filter(
-      item => item.id !== task.id
-    );
+    state.tasks = state.tasks.filter(item => item !== task);
 
     save();
     renderTasks();
@@ -457,7 +453,7 @@ function renderScheduleTasks() {
   const add = document.createElement("button");
   add.type = "button";
   add.className = "primary";
-  add.textContent = "＋ 新增待辦 / Thêm công việc";
+  add.textContent = "新增待辦 / Thêm công việc";
   add.style.marginBottom = "15px";
   add.onclick = addTask;
 
@@ -466,7 +462,9 @@ function renderScheduleTasks() {
   if (!state.tasks.length) {
     const empty = document.createElement("p");
     empty.className = "empty";
-    empty.textContent = "尚無待辦事項 / Chưa có công việc.";
+    empty.textContent =
+      "尚無待辦事項 / Chưa có công việc";
+
     container.append(empty);
   }
 
@@ -493,11 +491,98 @@ function addTask() {
 $("addTask").onclick = addTask;
 
 // ====================================
-// QUẢN LÝ MỤC TIÊU
+// 6. MỤC TIÊU THEO NGÀY / THÁNG / NĂM
 // ====================================
 
-function getGoals(type) {
-  return state.goalLists[type] || [];
+function getGoals(type, key = viewing[type]) {
+  return state.goalLists[type].filter(
+    goal => goal.period === key
+  );
+}
+
+function makeButton(label, onClick, className = "") {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+
+  if (className) button.className = className;
+
+  button.onclick = onClick;
+  return button;
+}
+
+function renderGoalPeriodPicker(manager) {
+  const row = document.createElement("div");
+  row.className = "goal-period-picker";
+
+  row.style.display = "flex";
+  row.style.flexWrap = "wrap";
+  row.style.alignItems = "center";
+  row.style.gap = "10px";
+  row.style.margin = "14px 0";
+
+  const label = document.createElement("label");
+  label.textContent = "選擇日期 / Chọn thời gian: ";
+
+  const input = document.createElement("input");
+
+  input.type =
+    activeGoalType === "day"
+      ? "date"
+      : activeGoalType === "month"
+        ? "month"
+        : "number";
+
+  input.value = viewing[activeGoalType];
+
+  if (activeGoalType === "year") {
+    input.min = "1900";
+    input.max = "9999";
+    input.step = "1";
+    input.style.width = "110px";
+  }
+
+  input.setAttribute(
+    "aria-label",
+    "Chọn ngày, tháng hoặc năm"
+  );
+
+  input.onchange = () => {
+    const value = input.value;
+
+    if (
+      activeGoalType === "year" &&
+      !/^\d{4}$/.test(value)
+    ) {
+      input.value = viewing[activeGoalType];
+      return;
+    }
+
+    if (
+      activeGoalType === "month" &&
+      !/^\d{4}-\d{2}$/.test(value)
+    ) return;
+
+    if (
+      activeGoalType === "day" &&
+      !/^\d{4}-\d{2}-\d{2}$/.test(value)
+    ) return;
+
+    viewing[activeGoalType] = value;
+    renderGoals();
+  };
+
+  const reset = makeButton(
+    "今天 / Hiện tại",
+    () => {
+      viewing[activeGoalType] = periodKey(activeGoalType);
+      renderGoals();
+    }
+  );
+
+  label.append(input);
+  row.append(label, reset);
+  manager.append(row);
 }
 
 function renderGoals() {
@@ -517,26 +602,28 @@ function renderGoals() {
   title.textContent = goalTypes[activeGoalType];
   manager.append(title);
 
-  const add = document.createElement("button");
-  add.type = "button";
-  add.className = "primary";
-  add.textContent = "＋ 新增目標 / Thêm mục tiêu";
+  renderGoalPeriodPicker(manager);
 
-  add.onclick = () => {
-    const name = prompt("目標名稱 / Nhập tên mục tiêu");
-    if (!name?.trim()) return;
+  const add = makeButton(
+    "新增目標 / Thêm mục tiêu",
+    () => {
+      const name = prompt("目標名稱 / Nhập tên mục tiêu");
+      if (!name?.trim()) return;
 
-    state.goalLists[activeGoalType].push({
-      id: makeId(),
-      name: name.trim(),
-      done: false,
-      progress: 0,
-      important: false
-    });
+      state.goalLists[activeGoalType].push({
+        id: makeId(),
+        period: viewing[activeGoalType],
+        name: name.trim(),
+        done: false,
+        progress: 0,
+        important: false
+      });
 
-    save();
-    refreshGoals();
-  };
+      save();
+      refreshGoals();
+    },
+    "primary"
+  );
 
   manager.append(add);
 
@@ -545,7 +632,9 @@ function renderGoals() {
   if (!goals.length) {
     const empty = document.createElement("p");
     empty.className = "empty";
-    empty.textContent = "尚未建立目標 / Chưa có mục tiêu.";
+    empty.textContent =
+      "尚未建立目標 / Chưa có mục tiêu cho thời gian này.";
+
     manager.append(empty);
   }
 
@@ -560,35 +649,29 @@ function renderGoals() {
     checkbox.onchange = () => {
       goal.done = checkbox.checked;
       goal.progress = goal.done ? 100 : 0;
+
       save();
       refreshGoals();
     };
 
-    const star = document.createElement("button");
-    star.type = "button";
-    star.className = "goal-star" +
-      (goal.important ? " starred" : "");
+    const star = makeButton(
+      goal.important ? "★" : "☆",
+      () => {
+        goal.important = !goal.important;
+        save();
+        refreshGoals();
+      },
+      "goal-star" + (goal.important ? " starred" : "")
+    );
 
-    star.textContent = goal.important ? "★" : "☆";
     star.title = "重要目標 / Mục tiêu quan trọng";
 
-    star.onclick = () => {
-      goal.important = !goal.important;
-      save();
-      refreshGoals();
-    };
-
     const name = document.createElement("span");
-    name.className = "goal-name" +
-      (goal.done ? " completed" : "");
+    name.className =
+      "goal-name" + (goal.done ? " completed" : "");
     name.textContent = goal.name;
 
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.textContent = "Sửa";
-    edit.title = "修改 / Sửa";
-
-    edit.onclick = () => {
+    const edit = makeButton("Sửa", () => {
       const value = prompt(
         "修改目標 / Sửa mục tiêu",
         goal.name
@@ -599,36 +682,31 @@ function renderGoals() {
       goal.name = value.trim();
       save();
       refreshGoals();
-    };
+    });
 
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.textContent = "X";
-    remove.title = "刪除 / Xóa";
-
-    remove.onclick = () => {
+    const remove = makeButton("X", () => {
       if (!confirm("確定刪除？ / Chắc chắn xóa?")) return;
 
       state.goalLists[activeGoalType] =
-        getGoals(activeGoalType).filter(
-          item => item.id !== goal.id
+        state.goalLists[activeGoalType].filter(
+          item => item !== goal
         );
 
       save();
       refreshGoals();
-    };
+    });
 
     card.append(checkbox, star, name, edit, remove);
     manager.append(card);
   });
 
-  const total = goals.length;
-  const completed = goals.filter(goal => goal.done).length;
-
   const summary = document.createElement("p");
   summary.className = "goal-summary";
+
   summary.textContent =
-    `已完成 / Hoàn thành: ${completed} / ${total}`;
+    `已完成 / Hoàn thành: ${
+      goals.filter(goal => goal.done).length
+    } / ${goals.length}`;
 
   manager.append(summary);
 }
@@ -641,7 +719,7 @@ document.querySelectorAll("[data-goal-type]").forEach(button => {
 });
 
 // ====================================
-// MỤC TIÊU QUAN TRỌNG TRANG CHỦ
+// 7. MỤC TIÊU QUAN TRỌNG TRANG CHỦ
 // ====================================
 
 function renderImportantGoals() {
@@ -653,8 +731,10 @@ function renderImportantGoals() {
   let count = 0;
 
   for (const type of ["year", "month", "day"]) {
-    const important = getGoals(type)
-      .filter(goal => goal.important);
+    const important = getGoals(
+      type,
+      periodKey(type)
+    ).filter(goal => goal.important);
 
     if (!important.length) continue;
 
@@ -663,11 +743,14 @@ function renderImportantGoals() {
     const heading = document.createElement("h3");
     heading.className = "important-heading";
     heading.textContent = goalTypes[type];
+
     list.append(heading);
 
     important.forEach(goal => {
       const row = document.createElement("div");
-      row.className = "important-goal" +
+
+      row.className =
+        "important-goal" +
         (goal.done ? " completed" : "");
 
       const star = document.createElement("span");
@@ -686,28 +769,30 @@ function renderImportantGoals() {
     empty.className = "empty";
     empty.textContent =
       "尚無重要目標 / Chưa có mục tiêu quan trọng.";
+
     list.append(empty);
   }
 }
 
 // ====================================
-// HIỆU SUẤT MỤC TIÊU
+// 8. BIỂU ĐỒ HIỆU SUẤT
 // ====================================
 
-function goalStats(type) {
-  const goals = getGoals(type);
-  const total = goals.length;
+function goalStats(type, key = periodKey(type)) {
+  const goals = getGoals(type, key);
   const done = goals.filter(goal => goal.done).length;
 
   return {
-    total,
+    total: goals.length,
     done,
-    pct: total ? Math.round(done / total * 100) : 0
+    pct: goals.length
+      ? Math.round(done / goals.length * 100)
+      : 0
   };
 }
 
-function updateDonut(donutId, textId, pct) {
-  const donut = $(donutId);
+function updateDonut(id, textId, pct) {
+  const donut = $(id);
   const text = $(textId);
 
   if (!donut || !text) return;
@@ -718,25 +803,37 @@ function updateDonut(donutId, textId, pct) {
 
 function renderPerformance() {
   for (const type of ["day", "month", "year"]) {
-    const result = goalStats(type);
+    const stats = goalStats(type);
 
     updateDonut(
       type + "Donut",
       type + "Pct",
-      result.pct
+      stats.pct
     );
   }
 
-  const today = goalStats("day");
-  updateDonut("donut", "todayPct", today.pct);
+  const todayStats = goalStats("day");
+
+  updateDonut(
+    "donut",
+    "todayPct",
+    todayStats.pct
+  );
 
   const stats = $("stats");
+  if (!stats) return;
+
   stats.replaceChildren();
 
   [
-    ["今日目標 / Mục tiêu ngày", today.pct + "%"],
-    ["已完成 / Đã hoàn thành",
-      today.done + " / " + today.total]
+    [
+      "今日目標 / Mục tiêu ngày",
+      todayStats.pct + "%"
+    ],
+    [
+      "已完成 / Đã hoàn thành",
+      `${todayStats.done} / ${todayStats.total}`
+    ]
   ].forEach(([label, value]) => {
     const row = document.createElement("div");
     row.className = "stat";
@@ -759,7 +856,52 @@ function refreshGoals() {
 }
 
 // ====================================
-// KHỞI ĐỘNG
+// 9. TỰ ĐỘNG CHUYỂN NGÀY MỚI
+// ====================================
+
+let lastToday = periodKey("day");
+
+function checkDateRollover() {
+  const current = periodKey("day");
+
+  if (current === lastToday) return;
+
+  const previous = lastToday;
+  lastToday = current;
+
+  for (const type of ["day", "month", "year"]) {
+    const previousKey =
+      type === "day"
+        ? previous
+        : type === "month"
+          ? previous.slice(0, 7)
+          : previous.slice(0, 4);
+
+    if (viewing[type] === previousKey) {
+      viewing[type] = periodKey(type);
+    }
+  }
+
+  if (selected === previous) {
+    selected = current;
+    year = Number(current.slice(0, 4));
+    month = Number(current.slice(5, 7)) - 1;
+  }
+
+  renderCalendar();
+  refreshGoals();
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) checkDateRollover();
+});
+
+window.addEventListener("focus", checkDateRollover);
+
+setInterval(checkDateRollover, 60 * 1000);
+
+// ====================================
+// 10. KHỞI ĐỘNG
 // ====================================
 
 renderCalendar();

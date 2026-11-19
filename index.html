@@ -6,12 +6,81 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cozy Life Planner</title>
   <link rel="stylesheet" href="style.css">
+
+  <style>
+    .module-menu {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+
+    .module-card {
+      display: block;
+      text-decoration: none;
+      color: #534639;
+      background: #fffaf5;
+      border: 1px solid #efdfd0;
+      border-radius: 20px;
+      padding: 26px;
+      cursor: pointer;
+    }
+
+    .module-card:hover {
+      background: #fff0e0;
+      border-color: #d97845;
+    }
+
+    .module-card h2 {
+      margin-bottom: 10px;
+    }
+
+    .module-card p {
+      color: #947969;
+      font-size: 13px;
+      margin: 0;
+    }
+
+    .module-detail {
+      margin-top: 16px;
+    }
+
+    .module-detail[hidden] {
+      display: none !important;
+    }
+
+    .module-back {
+      margin-bottom: 16px;
+    }
+
+    .settings-item {
+      padding: 16px 0;
+      border-bottom: 1px solid #f0e3d5;
+    }
+
+    .settings-item p {
+      color: #947969;
+      font-size: 13px;
+    }
+
+    @media (max-width: 680px) {
+      .module-menu {
+        grid-template-columns: 1fr;
+      }
+
+      .module-card {
+        padding: 18px;
+      }
+    }
+  </style>
 </head>
 
 <body>
 <div class="app">
 
+  <!-- THANH MENU: CHỈ 5 MỤC LỚN -->
   <aside class="sidebar">
+
     <div class="brand">
       🌱
       <span>
@@ -21,132 +90,401 @@
     </div>
 
     <nav>
-      <a href="#home" data-page="home">🏠 首頁 / Trang chủ</a>
-      <a href="#calendar" data-page="calendar">🗓️ 行程管理 / Lịch trình</a>
-      <a href="#tasks" data-page="tasks">☑️ 待辦事項 / Việc cần làm</a>
-      <a href="#goals" data-page="goals">🎯 目標管理 / Mục tiêu</a>
-      <a href="#performance" data-page="performance">📊 效率分析 / Hiệu suất</a>
-      <a href="#future" data-page="future">💼 費用管理 / Thu chi</a>
+      <a href="#home" data-page="home">
+        🏠 首頁 / Trang chủ
+      </a>
+
+      <a href="#calendar" data-page="calendar">
+        🗓️ 行程管理 / Lịch trình
+      </a>
+
+      <a href="#future" data-page="future">
+        💰 收支管理 / Thu chi
+      </a>
+
+      <a href="#performance" data-page="performance">
+        📊 效率分析 / Hiệu suất
+      </a>
+
+      <a href="#settings" data-page="settings">
+        ⚙️ 系統設定 / Cài đặt
+      </a>
     </nav>
 
     <div class="cat">🐈<br>🌿 📚</div>
   </aside>
 
   <main>
+
     <header>
       <div>
         <h1>🌷 Cozy Life Planner</h1>
-        <p>用計畫管理生活，讓每一天更有意義。 / Lên kế hoạch cho mỗi ngày.</p>
+        <p>
+          用計畫管理生活，讓每一天更有意義。
+          / Lên kế hoạch cho mỗi ngày.
+        </p>
       </div>
-      <div class="account">🔒 示範模式 / Bản xem thử</div>
+
+      <div class="account">
+        🔒 示範模式 / Bản xem thử
+      </div>
     </header>
 
-    <!-- TRANG CHỦ -->
+    <!-- ========================= -->
+    <!-- 1. TRANG CHỦ -->
+    <!-- ========================= -->
+
     <section id="homePage" class="app-page">
 
       <div class="content">
+
         <section class="maincol">
 
+          <!-- LỊCH TỔNG QUAN -->
           <section class="panel" id="calendar">
+
             <div class="heading">
-              <h2>🗓️ 行程總覽 <small>/ Tổng quan lịch trình</small></h2>
+              <h2>
+                🗓️ 行程總覽
+                <small>/ Tổng quan lịch trình</small>
+              </h2>
+
               <div class="controls">
-                <button id="prev" aria-label="Tháng trước">‹</button>
+                <button id="prev">‹</button>
                 <strong id="monthTitle"></strong>
-                <button id="next" aria-label="Tháng sau">›</button>
-                <button class="primary" id="addEvent">＋ 新增 / Thêm</button>
+                <button id="next">›</button>
+
+                <button class="primary" id="addEvent">
+                  ＋ 新增 / Thêm
+                </button>
               </div>
             </div>
+
             <div class="weekday" id="weekdays"></div>
             <div class="calendar" id="days"></div>
-            <p class="hint">點選日期查看或新增行程 / Chọn ngày để xem hoặc thêm lịch.</p>
+
+            <p class="hint">
+              點選日期查看或新增行程
+              / Chọn ngày để xem hoặc thêm lịch.
+            </p>
+
           </section>
 
           <div class="bottom">
+
+            <!-- VIỆC HÔM NAY -->
             <section class="panel" id="tasks">
+
               <div class="heading">
-                <h2>☑️ 今日待辦 <small>/ Việc hôm nay</small></h2>
-                <button class="round" id="addTask">＋</button>
+                <h2>
+                  ☑️ 今日待辦
+                  <small>/ Việc hôm nay</small>
+                </h2>
+
+                <button class="round" id="addTask">
+                  ＋
+                </button>
               </div>
+
               <div id="taskList"></div>
+
             </section>
 
+            <!-- HIỆU SUẤT NGÀY -->
             <section class="panel" id="performance">
-              <h2>📈 今日目標達成率 <small>/ Hiệu suất mục tiêu ngày</small></h2>
+
+              <h2>
+                📈 今日目標達成率
+                <small>/ Hiệu suất mục tiêu ngày</small>
+              </h2>
+
               <div class="donut" id="donut">
                 <span id="todayPct">0%</span>
               </div>
+
               <div class="stats" id="stats"></div>
+
             </section>
+
           </div>
         </section>
 
         <aside class="right">
 
+          <!-- LỊCH ĐÃ CHỌN -->
           <section class="panel">
-            <h2 id="selectedTitle">📅 今日行程 / Lịch hôm nay</h2>
+
+            <h2 id="selectedTitle">
+              📅 今日行程 / Lịch hôm nay
+            </h2>
+
             <div id="eventList"></div>
+
           </section>
 
+          <!-- MỤC TIÊU QUAN TRỌNG -->
           <section class="panel" id="importantGoals">
-            <h2>⭐ 重要目標 <small>/ Mục tiêu quan trọng</small></h2>
-            <p class="hint">只顯示已標記星號的目標 / Chỉ hiện mục tiêu được đánh dấu sao.</p>
+
+            <h2>
+              ⭐ 重要目標
+              <small>/ Mục tiêu quan trọng</small>
+            </h2>
+
+            <p class="hint">
+              顯示已標記星號的年度、月度及每日目標
+              / Hiển thị mục tiêu năm, tháng, ngày được đánh dấu sao.
+            </p>
+
             <div id="importantGoalList"></div>
+
           </section>
 
         </aside>
+
       </div>
     </section>
 
-    <!-- QUẢN LÝ MỤC TIÊU -->
-    <section id="goalsPage" class="app-page" hidden>
+    <!-- ========================= -->
+    <!-- 2. QUẢN LÝ LỊCH TRÌNH -->
+    <!-- ========================= -->
 
-      <section class="panel" id="goals">
-        <h2>🎯 目標管理 <small>/ Quản lý mục tiêu</small></h2>
+    <section id="schedulePage" class="app-page" hidden>
 
-        <div class="goal-tabs">
-          <button type="button" data-goal-type="year">🌱 年度目標 / Mục tiêu năm</button>
-          <button type="button" data-goal-type="month">🌿 月度目標 / Mục tiêu tháng</button>
-          <button type="button" data-goal-type="day">☀️ 每日目標 / Mục tiêu ngày</button>
+      <section class="panel">
+
+        <h2>
+          🗓️ 行程管理
+          <small>/ Quản lý lịch trình</small>
+        </h2>
+
+        <p class="hint">
+          請選擇要管理的項目
+          / Chọn chức năng muốn quản lý.
+        </p>
+
+        <div class="module-menu">
+
+          <a href="#tasks" class="module-card"
+             data-schedule-section="tasks">
+
+            <h2>☑️ 待辦事項</h2>
+            <p>Quản lý việc cần làm</p>
+
+          </a>
+
+          <a href="#goals" class="module-card"
+             data-schedule-section="goals">
+
+            <h2>🎯 目標管理</h2>
+            <p>Quản lý mục tiêu năm, tháng, ngày</p>
+
+          </a>
+
         </div>
 
-        <div id="goalManager"></div>
+      </section>
+
+      <!-- CHỨC NĂNG CON: VIỆC CẦN LÀM -->
+      <section id="scheduleTasks" class="module-detail" hidden>
+
+        <button class="module-back" type="button"
+                data-back-schedule>
+          ‹ 返回 / Quay lại
+        </button>
+
+        <section class="panel">
+
+          <h2>
+            ☑️ 待辦事項
+            <small>/ Quản lý việc cần làm</small>
+          </h2>
+
+          <p class="hint">
+            工作清單、完成狀態與重要事項
+            / Danh sách, trạng thái hoàn thành và công việc quan trọng.
+          </p>
+
+          <div id="scheduleTaskList"></div>
+
+        </section>
+
+      </section>
+
+      <!-- CHỨC NĂNG CON: MỤC TIÊU -->
+      <section id="goalsPage" class="module-detail" hidden>
+
+        <button class="module-back" type="button"
+                data-back-schedule>
+          ‹ 返回 / Quay lại
+        </button>
+
+        <section class="panel" id="goals">
+
+          <h2>
+            🎯 目標管理
+            <small>/ Quản lý mục tiêu</small>
+          </h2>
+
+          <div class="goal-tabs">
+
+            <button type="button" data-goal-type="year">
+              🌱 年度目標 / Mục tiêu năm
+            </button>
+
+            <button type="button" data-goal-type="month">
+              🌿 月度目標 / Mục tiêu tháng
+            </button>
+
+            <button type="button" data-goal-type="day">
+              ☀️ 每日目標 / Mục tiêu ngày
+            </button>
+
+          </div>
+
+          <div id="goalManager"></div>
+
+        </section>
+
       </section>
 
     </section>
 
-    <!-- PHÂN TÍCH HIỆU SUẤT -->
+    <!-- ========================= -->
+    <!-- 3. QUẢN LÝ THU CHI -->
+    <!-- ========================= -->
+
+    <section id="futurePage" class="app-page" hidden>
+
+      <section class="panel" id="future">
+
+        <h2>
+          💰 收支管理
+          <small>/ Quản lý thu chi</small>
+        </h2>
+
+        <div class="module-menu">
+
+          <div class="module-card">
+            <h2>💵 收入管理</h2>
+            <p>Quản lý thu nhập</p>
+          </div>
+
+          <div class="module-card">
+            <h2>💸 支出管理</h2>
+            <p>Quản lý chi phí</p>
+          </div>
+
+        </div>
+
+        <p class="hint">
+          收支功能將於下一階段開發。
+          / Chức năng thu chi sẽ được phát triển ở giai đoạn tiếp theo.
+        </p>
+
+      </section>
+
+    </section>
+
+    <!-- ========================= -->
+    <!-- 4. PHÂN TÍCH HIỆU SUẤT -->
+    <!-- ========================= -->
+
     <section id="performancePage" class="app-page" hidden>
 
       <section class="panel">
-        <h2>📊 目標達成分析 <small>/ Phân tích hiệu suất mục tiêu</small></h2>
+
+        <h2>
+          📊 效率分析
+          <small>/ Phân tích hiệu suất</small>
+        </h2>
+
+        <h2>
+          🎯 目標達成分析
+          <small>/ Hiệu suất mục tiêu</small>
+        </h2>
 
         <div class="performance-grid">
+
           <div class="performance-card">
+
             <h2>☀️ 每日目標 / Mục tiêu ngày</h2>
-            <div class="donut" id="dayDonut"><span id="dayPct">0%</span></div>
+
+            <div class="donut" id="dayDonut">
+              <span id="dayPct">0%</span>
+            </div>
+
           </div>
 
           <div class="performance-card">
+
             <h2>🌿 月度目標 / Mục tiêu tháng</h2>
-            <div class="donut" id="monthDonut"><span id="monthPct">0%</span></div>
+
+            <div class="donut" id="monthDonut">
+              <span id="monthPct">0%</span>
+            </div>
+
           </div>
 
           <div class="performance-card">
+
             <h2>🌱 年度目標 / Mục tiêu năm</h2>
-            <div class="donut" id="yearDonut"><span id="yearPct">0%</span></div>
+
+            <div class="donut" id="yearDonut">
+              <span id="yearPct">0%</span>
+            </div>
+
           </div>
+
         </div>
+
+      </section>
+
+      <section class="panel" style="margin-top:18px">
+
+        <h2>
+          💰 收支統計
+          <small>/ Thống kê thu chi</small>
+        </h2>
+
+        <p class="hint">
+          待收支管理功能完成後啟用。
+          / Sẽ triển khai sau khi hoàn thiện quản lý thu chi.
+        </p>
+
       </section>
 
     </section>
 
-    <!-- QUẢN LÝ THU CHI: SẼ LÀM SAU -->
-    <section id="futurePage" class="app-page" hidden>
-      <section class="panel" id="future">
-        <h2>💼 費用管理 <small>/ Thu chi</small></h2>
-        <p class="hint">此功能將在下一階段開發。 / Chức năng này sẽ được phát triển ở giai đoạn tiếp theo.</p>
+    <!-- ========================= -->
+    <!-- 5. CÀI ĐẶT -->
+    <!-- ========================= -->
+
+    <section id="settingsPage" class="app-page" hidden>
+
+      <section class="panel">
+
+        <h2>
+          ⚙️ 系統設定
+          <small>/ Cài đặt hệ thống</small>
+        </h2>
+
+        <div class="settings-item">
+          <h2>👤 帳號管理 / Quản lý tài khoản</h2>
+          <p>Đăng nhập và bảo mật — sẽ phát triển sau.</p>
+        </div>
+
+        <div class="settings-item">
+          <h2>🌐 語言設定 / Cài đặt ngôn ngữ</h2>
+          <p>Chuyển đổi tiếng Trung phồn thể và tiếng Việt — sẽ phát triển sau.</p>
+        </div>
+
+        <div class="settings-item">
+          <h2>☁️ 資料備份與同步 / Sao lưu và đồng bộ</h2>
+          <p>Sao lưu dữ liệu và đồng bộ thiết bị — sẽ phát triển sau.</p>
+        </div>
+
       </section>
+
     </section>
 
   </main>
@@ -154,7 +492,9 @@
 
 <!-- HỘP THÊM LỊCH TRÌNH -->
 <dialog id="editor">
+
   <form method="dialog" id="eventForm">
+
     <h2>新增行程 / Thêm lịch trình</h2>
 
     <label>
@@ -173,12 +513,20 @@
     </label>
 
     <menu>
-      <button type="button" id="cancel">取消 / Hủy</button>
-      <button class="primary" type="submit">儲存 / Lưu</button>
+      <button type="button" id="cancel">
+        取消 / Hủy
+      </button>
+
+      <button class="primary" type="submit">
+        儲存 / Lưu
+      </button>
     </menu>
+
   </form>
+
 </dialog>
 
 <script src="app.js"></script>
+
 </body>
 </html>

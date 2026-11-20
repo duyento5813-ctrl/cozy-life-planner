@@ -519,28 +519,41 @@ function deleteTask(task,date) {
   if(save())refreshTaskViews();
 }
 function createTaskRow(task,key){
-  const row=document.createElement("div");row.className="task"+(isTaskDone(task,key)?" done":"");
-  Object.assign(row.style,{display:"flex",alignItems:"center",flexWrap:"wrap",gap:"10px"});
-  const check=document.createElement("input");check.type="checkbox";check.checked=isTaskDone(task,key);
-  check.onchange=()=>setTaskDone(task,key,check.checked);
-  const label=document.createElement("span");label.textContent=taskName(task,key);label.style.flex="1";
-  if(check.checked){label.style.textDecoration="line-through";label.style.opacity=".6";}
-  const star=makeButton(taskImportant(task,key)?"★":"☆",()=>{
-    if(task.repeat==="none")task.important=!task.important;
-    else task.overrides[key]={...task.overrides[key],important:!taskImportant(task,key)};
-    if(save())refreshTaskViews();
-  },"goal-star"+(taskImportant(task,key)?" starred":""));
+  const wrapper=document.createElement('div');
+  const row=document.createElement('div');row.className='cozy-task-row';
   const status=taskStatus(task,key);
-  if(status==='skipped') label.style.opacity='.55';
-  const details=document.createElement('small');
+  const check=document.createElement('input');check.type='checkbox';check.checked=status==='done';
+  check.setAttribute('aria-label','完成 / Hoàn thành');
+  check.onchange=()=>setTaskDone(task,key,check.checked);
+  const name=document.createElement('span');name.className='cozy-task-name'+(status==='done'?' is-done':status==='skipped'?' is-skipped':'');
+  name.textContent=taskName(task,key);
+  const star=makeButton(taskImportant(task,key)?'★':'☆',()=>{
+    const origin=taskOrigin(task,key);
+    if(task.repeat==='none')task.important=!task.important;
+    else task.overrides[origin]={...task.overrides[origin],important:!taskImportant(task,key)};
+    if(save())refreshTaskViews();
+  },'goal-star'+(taskImportant(task,key)?' starred':''));
+  star.title='重要 / Quan trọng';
+  const menu=document.createElement('details');
+  const trigger=document.createElement('summary');trigger.textContent='⋯';trigger.title='更多 / Tùy chọn';
+  const actions=document.createElement('div');actions.className='cozy-task-actions';
+  const action=(label,fn)=>actions.append(makeButton(label,()=>{menu.open=false;fn();}));
+  action('編輯 / Sửa',()=>editTask(task,key));
+  action('移動 / Dời',()=>moveTask(task,key));
+  if(status!=='skipped')action('略過 / Bỏ qua',()=>skipTask(task,key));
+  if(status==='skipped')action('恢復未完成 / Chưa hoàn thành',()=>{
+    task.skippedDates=task.skippedDates.filter(d=>d!==taskOrigin(task,key));
+    if(save())refreshTaskViews();
+  });
+  action('刪除 / Xóa',()=>deleteTask(task,key));
+  menu.append(trigger,actions);row.append(check,name,star,menu);wrapper.append(row);
   const completed=task.completedAt?.[taskOrigin(task,key)];
   const goal=Object.values(state.goalLists).flat().find(g=>g.id===taskGoal(task,key));
-  details.textContent=[status==='skipped'?'已略過 / Đã bỏ qua':'',completed?'實際完成 / Hoàn thành: '+new Date(completed).toLocaleString('vi-VN'):'',taskNotes(task,key),goal?'🎯 '+goal.name:''].filter(Boolean).join(' · ');
-  details.style.flexBasis='100%';details.style.opacity='.7';
-  row.append(check,label,star,makeButton('略過 / Bỏ qua',()=>skipTask(task,key)),
-    makeButton('移動 / Dời',()=>moveTask(task,key)),makeButton("編輯 / Sửa",()=>editTask(task,key)),makeButton("X",()=>deleteTask(task,key)),details);
-  return row;
+  const meta=[status==='skipped'?'已略過 / Đã bỏ qua':'',completed?'完成 / Xong: '+new Date(completed).toLocaleString('vi-VN'):'',taskNotes(task,key),goal?'🎯 '+goal.name:''].filter(Boolean);
+  if(meta.length){const info=document.createElement('div');info.className='cozy-task-meta';info.textContent=meta.join(' · ');wrapper.append(info);}
+  return wrapper;
 }
+
 function renderTasks(){
   const box=$("taskList");box.replaceChildren();const key=todayKey();const tasks=getTasksForDate(key);
   if(!tasks.length)box.append(emptyMessage("今日尚無待辦事項 / Hôm nay chưa có công việc"));
@@ -578,19 +591,64 @@ function renderOverdue(container){
   container.append(section);
 }
 function renderScheduleTasks(){
-  const box=$("scheduleTaskList");if(!box)return;box.replaceChildren();
-  const bar=document.createElement("div");Object.assign(bar.style,{display:"flex",gap:"10px",flexWrap:"wrap",marginBottom:"16px"});
-  const date=makeField("選擇日期 / Chọn ngày","date",selectedTaskDate);
-  date.input.onchange=()=>{if(validDate(date.input.value)){selectedTaskDate=date.input.value;renderScheduleTasks();}};
-  bar.append(date.label,makeButton("今天 / Hôm nay",()=>{selectedTaskDate=todayKey();renderScheduleTasks();}),makeButton("新增待辦 / Thêm công việc",()=>makeTaskEditor(box,selectedTaskDate),"primary"));
-  box.append(bar);
-  const tasks=getTasksForDate(selectedTaskDate);
-  if(!tasks.length)box.append(emptyMessage("此日期尚無待辦事項 / Ngày này chưa có công việc"));
-  tasks.forEach(t=>box.append(createTaskRow(t,selectedTaskDate)));
-  const done=tasks.filter(t=>isTaskDone(t,selectedTaskDate)).length;
-  const p=document.createElement("p");p.className="goal-summary";p.textContent=`已完成 / Hoàn thành: ${done} / ${tasks.length}`;box.append(p);
-  renderOverdue(box);renderTaskSearch(box);
+  const box=$('scheduleTaskList');if(!box)return;box.replaceChildren();
+  const toolbar=document.createElement('div');toolbar.className='cozy-toolbar';
+  const date=document.createElement('input');date.type='date';date.value=selectedTaskDate;date.title='選擇日期 / Chọn ngày';
+  date.onchange=()=>{if(validDate(date.value)){selectedTaskDate=date.value;renderScheduleTasks();}};
+  toolbar.append(date,makeButton('今天 / Hôm nay',()=>{selectedTaskDate=todayKey();renderScheduleTasks();}),
+    makeButton('＋ 新增 / Thêm',()=>makeTaskEditor(box,selectedTaskDate), 'primary'));
+  box.append(toolbar);
+  const search=document.createElement('div');search.className='cozy-search';
+  const query=document.createElement('input');query.type='search';query.placeholder='搜尋待辦事項 / Tìm công việc...';query.value=taskSearch;
+  query.setAttribute('aria-label','搜尋待辦事項 / Tìm công việc');
+  const glass=makeButton('⌕',()=>query.focus());glass.title='搜尋 / Tìm kiếm';glass.setAttribute('aria-label','搜尋 / Tìm kiếm');
+  search.append(query,glass);box.append(search);
+  const results=document.createElement('div');results.className='cozy-task-list';box.append(results);
+  const summary=document.createElement('p');summary.className='goal-summary';box.append(summary);
+  function draw(){
+    const key=selectedTaskDate;
+    const tasks=getTasksForDate(key).filter(t=>taskName(t,key).toLocaleLowerCase().includes(taskSearch.toLocaleLowerCase()));
+    results.replaceChildren();
+    if(!tasks.length)results.append(emptyMessage('沒有符合的待辦 / Không có công việc phù hợp'));
+    tasks.forEach(t=>results.append(createTaskRow(t,key)));
+    const all=getTasksForDate(key);summary.textContent=`${key} · 已完成 / Hoàn thành: ${all.filter(t=>isTaskDone(t,key)).length}/${all.length}`;
+  }
+  query.oninput=()=>{taskSearch=query.value;draw();};draw();
+  const eventFold=document.createElement('details');eventFold.className='cozy-fold';
+  const eventHeading=document.createElement('summary');eventHeading.textContent='行程 / Sự kiện ('+state.events.filter(e=>e.date===selectedTaskDate).length+')';
+  eventFold.append(eventHeading);
+  const events=state.events.filter(e=>e.date===selectedTaskDate).sort((a,b)=>String(a.time||'').localeCompare(String(b.time||'')));
+  if(!events.length)eventFold.append(emptyMessage('尚無行程 / Chưa có sự kiện'));
+  events.forEach(event=>{
+    const row=document.createElement('div');row.className='cozy-event-row';
+    const label=document.createElement('span');label.textContent=`${event.time||''} ${event.name||''}${event.notes?' · '+event.notes:''}`;
+    row.append(label,makeButton('編輯 / Sửa',()=>openEventEditor(event)),makeButton('×',()=>{
+      if(!confirm('刪除此行程？ / Xóa sự kiện?'))return;
+      putInTrash('event',event,event.name);state.events=state.events.filter(e=>e!==event);
+      if(save()){renderScheduleTasks();renderCalendar();}
+    }));eventFold.append(row);
+  });
+  eventFold.append(makeButton('＋ 新增行程 / Thêm sự kiện',()=>{
+    selected=selectedTaskDate;openEventEditor();
+  }));box.append(eventFold);
+  const overdueFold=document.createElement('details');overdueFold.className='cozy-fold';
+  const {result,truncated}=getOverdueTasks();
+  const overdueTitle=document.createElement('summary');overdueTitle.textContent=`逾期待辦 / Quá hạn (${result.length}${truncated?'+':''})`;
+  overdueFold.append(overdueTitle);
+  if(truncated)overdueFold.append(emptyMessage('較早資料可能未完全統計 / Có thể thiếu dữ liệu quá cũ'));
+  if(!result.length)overdueFold.append(emptyMessage('沒有逾期待辦 / Không có việc quá hạn'));
+  (showAllOverdue?result:result.slice(0,50)).forEach(({task,key})=>{
+    const row=document.createElement('div');row.className='cozy-event-row';
+    const label=document.createElement('span');label.textContent=`${key} · ${taskName(task,key)}`;
+    row.append(label,makeButton('完成 / Xong',()=>setTaskDone(task,key,true)),
+      makeButton('略過 / Bỏ qua',()=>skipTask(task,key)),
+      makeButton('查看 / Xem',()=>{selectedTaskDate=key;renderScheduleTasks();}));overdueFold.append(row);
+  });
+  if(result.length>50)overdueFold.append(makeButton(showAllOverdue?'收起 / Thu gọn':'顯示全部 / Hiện tất cả',()=>{
+    showAllOverdue=!showAllOverdue;renderScheduleTasks();
+  }));box.append(overdueFold);
 }
+
 function addTask(){selectedTaskDate=todayKey();navigate("tasks");renderScheduleTasks();makeTaskEditor($("scheduleTaskList"),selectedTaskDate);}
 $("addTask").onclick=addTask;
 function renderCalendar(){
@@ -609,7 +667,7 @@ function renderCalendar(){
     state.events.filter(e=>e.date===key).slice(0,2).forEach(e=>{const chip=document.createElement("span");chip.className="chip";chip.textContent=`${e.time||""} ${e.name||""}`;button.append(chip);});
     const tasks=getTasksForDate(key);
     if(tasks.length){const chip=document.createElement("span");chip.className="chip";chip.textContent=`待辦 ${tasks.filter(t=>isTaskDone(t,key)).length}/${tasks.length}`;button.append(chip);}
-    button.onclick=()=>{selected=key;year=dt.getFullYear();month=dt.getMonth();renderCalendar();};$("days").append(button);
+    button.onclick=()=>{selected=key;selectedTaskDate=key;year=dt.getFullYear();month=dt.getMonth();renderCalendar();};$("days").append(button);
   }
   renderEvents();
   let toggle=$('cozyWeekToggle');
@@ -622,6 +680,7 @@ function openEventEditor(event=null){editingEvent=event;$("eventForm").reset();$
   if(!notes){const field=makeField('備註 / Ghi chú','text');notes=field.input;notes.id='cozyEventNotes';$('eventForm').append(field.label);}
   notes.value=event?.notes||'';$('editor').showModal();}
 function renderEvents(){
+  if (!$('selectedTitle') || !$('eventList')) return;
   $("selectedTitle").textContent=`${selected} 行程與待辦 / Lịch và công việc`;
   const box=$("eventList");box.replaceChildren();
   const h=document.createElement("h3");h.textContent="行程 / Sự kiện";box.append(h);
@@ -665,7 +724,7 @@ $("eventForm").onsubmit=e=>{
   else state.events.push({id:makeId(),name,date,time,notes});
   if(!save())return;
   selected=date;year=Number(date.slice(0,4));month=Number(date.slice(5,7))-1;
-  editingEvent=null;$("editor").close();renderCalendar();
+  editingEvent=null;$("editor").close();renderCalendar();renderScheduleTasks();
 };
 
 // ==========================================
@@ -753,7 +812,7 @@ function renderGoals() {
 
   const title = document.createElement("h2");
   title.textContent = goalTypes[activeGoalType];
-  manager.append(title);
+  // Tabs already indicate the active goal period.
 
   renderGoalPeriodPicker(manager);
 
@@ -848,7 +907,11 @@ function renderGoals() {
       refreshGoals();
     });
 
-    card.append(checkbox, star, name, edit, remove);
+    const actions=document.createElement('details');actions.className='cozy-actions';
+    const more=document.createElement('summary');more.textContent='⋯';more.setAttribute('aria-label','更多操作 / Thao tác khác');
+    const menu=document.createElement('div');menu.className='cozy-action-menu';menu.append(edit,remove);
+    actions.append(more,menu);
+    card.append(checkbox, name, star, actions);
     manager.append(card);
   });
 
@@ -1061,32 +1124,8 @@ setInterval(checkDateRollover, 60 * 1000);
 // ==========================================
 // EXTRA: FILTER, REMINDERS, TRASH, BACKUP
 // ==========================================
-let taskSearch='',taskFilter='all',taskSort='important';
-function renderTaskSearch(box) {
-  const section=document.createElement('section');section.style.marginTop='22px';
-  const h=document.createElement('h3');h.textContent='搜尋與篩選 / Tìm kiếm và lọc';section.append(h);
-  const search=makeField('關鍵字 / Từ khóa','search',taskSearch);
-  const results=document.createElement('div');
-  const filter=document.createElement('select');
-  [['all','全部 / Tất cả'],['pending','未完成 / Chưa xong'],['done','完成 / Đã xong'],['skipped','略過 / Bỏ qua'],['important','★ 重要 / Quan trọng']].forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;filter.append(o);});
-  filter.value=taskFilter;
-  const sort=document.createElement('select');
-  [['important','★ 優先 / Quan trọng'],['date','日期 / Ngày'],['status','狀態 / Trạng thái']].forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;sort.append(o);});
-  sort.value=taskSort;
-  function draw(){
-    results.replaceChildren();const key=selectedTaskDate;
-    const list=getTasksForDate(key).filter(t=>(!taskSearch||taskName(t,key).toLowerCase().includes(taskSearch.toLowerCase())) &&
-      (taskFilter==='all'||(taskFilter==='important'?taskImportant(t,key):taskStatus(t,key)===taskFilter)));
-    if(taskSort==='status')list.sort((a,b)=>taskStatus(a,key).localeCompare(taskStatus(b,key)));
-    if(taskSort==='date')list.sort((a,b)=>a.date.localeCompare(b.date));
-    if(!list.length)results.append(emptyMessage('沒有符合的待辦 / Không có kết quả'));
-    list.forEach(t=>results.append(createTaskRow(t,key)));
-  }
-  search.input.oninput=()=>{taskSearch=search.input.value;draw();};
-  filter.onchange=()=>{taskFilter=filter.value;draw();};
-  sort.onchange=()=>{taskSort=sort.value;draw();};
-  section.append(search.label,filter,sort,results);box.append(section);draw();
-}
+let taskSearch='';
+
 function exportBackup(){
   const blob=new Blob([JSON.stringify({format:'cozy-life-planner',version:2,exportedAt:new Date().toISOString(),data:state},null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`cozy-backup-${todayKey()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -1131,7 +1170,7 @@ function renderTrash(){
   });
 }
 function initSafetyPanel(){
-  const parent=$('settingsPage')||$('schedulePage');if(!parent)return;
+  const parent=$('cozyDataTools')||$('settingsPage');if(!parent)return;
   const panel=document.createElement('section');panel.style.padding='16px';panel.style.margin='16px 0';
   const h=document.createElement('h3');h.textContent='資料管理 / Quản lý dữ liệu';panel.append(h);
   panel.append(makeButton('匯出備份 JSON / Xuất sao lưu',exportBackup));
@@ -1167,3 +1206,22 @@ renderScheduleTasks();
 refreshGoals();
 
 showPage(location.hash.slice(1) || "home");
+// Minimal interface: lightweight tab controls (no changes to stored data).
+function initMinimalTabs(){
+  document.querySelectorAll('[data-finance-tab]').forEach(button=>{
+    button.onclick=()=>{
+      document.querySelectorAll('[data-finance-tab]').forEach(b=>b.classList.toggle('active',b===button));
+      const text=$('financePlaceholder');if(text)text.textContent=button.dataset.financeTab==='income'
+        ?'收入管理尚未開放 / Quản lý thu nhập đang được phát triển.'
+        :'支出管理尚未開放 / Quản lý chi phí đang được phát triển.';
+    };
+  });
+  document.querySelectorAll('[data-performance-tab]').forEach(button=>{
+    button.onclick=()=>{
+      const type=button.dataset.performanceTab;
+      document.querySelectorAll('[data-performance-tab]').forEach(b=>b.classList.toggle('active',b===button));
+      document.querySelectorAll('[data-performance-card]').forEach(card=>card.hidden=card.dataset.performanceCard!==type);
+    };
+  });
+}
+initMinimalTabs();

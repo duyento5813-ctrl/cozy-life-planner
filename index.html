@@ -73,6 +73,32 @@
         padding: 18px;
       }
     }
+
+    /* Compact task management — no change to other modules */
+    #scheduleTasks .panel { max-width: 100%; }
+    .cozy-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin:14px 0; }
+    .cozy-toolbar input[type="date"] { width:auto; max-width:180px; min-height:38px; }
+    .cozy-toolbar button { min-height:38px; }
+    .cozy-search { display:flex; align-items:center; border:1px solid #eadbcc; border-radius:12px; background:#fffaf5; overflow:hidden; margin:12px 0; max-width:680px; }
+    .cozy-search input { border:0 !important; background:transparent !important; outline:0; box-shadow:none !important; min-width:0; width:100%; padding:11px 14px; flex:1; }
+    .cozy-search button { border:0; background:transparent; padding:9px 14px; color:#8a6e5c; font-size:19px; }
+    .cozy-task-list { display:grid; gap:4px; }
+    .cozy-task-row { display:flex; align-items:center; gap:10px; padding:10px 6px; border-bottom:1px solid #f0e5db; min-width:0; }
+    .cozy-task-row .cozy-task-name { flex:1; min-width:0; overflow-wrap:anywhere; }
+    .cozy-task-row .cozy-task-name.is-done { text-decoration:line-through; opacity:.55; }
+    .cozy-task-row .cozy-task-name.is-skipped { opacity:.55; }
+    .cozy-task-row .goal-star { flex-shrink:0; }
+    .cozy-task-row details { position:relative; flex-shrink:0; }
+    .cozy-task-row summary { cursor:pointer; list-style:none; padding:6px 10px; font-size:20px; border-radius:8px; }
+    .cozy-task-row summary::-webkit-details-marker { display:none; }
+    .cozy-task-actions { position:absolute; z-index:15; right:0; top:100%; display:grid; gap:3px; min-width:175px; padding:8px; border:1px solid #eadbcc; background:#fffaf5; box-shadow:0 6px 18px #3c261522; border-radius:12px; }
+    .cozy-task-actions button { text-align:left; white-space:nowrap; }
+    .cozy-task-meta { font-size:12px; color:#9b806c; margin:0 0 6px 35px; overflow-wrap:anywhere; }
+    .cozy-fold { border-top:1px solid #efe0d1; margin-top:16px; padding-top:12px; }
+    .cozy-fold summary { cursor:pointer; font-weight:650; }
+    .cozy-event-row { display:flex; gap:10px; align-items:center; padding:9px 0; border-bottom:1px solid #f0e5db; }
+    .cozy-event-row span { flex:1; overflow-wrap:anywhere; }
+    @media(max-width:680px) { .cozy-toolbar input[type="date"] { max-width:155px; } .cozy-task-actions { min-width:155px; } }
   </style>
 </head>
 
@@ -303,17 +329,6 @@
 
           <div id="scheduleTaskList"></div>
 
-          <!-- LỊCH TRÌNH ĐƯỢC CHỌN -->
-          <section class="panel">
-
-            <h2 id="selectedTitle">
-              今日行程 / Lịch hôm nay
-            </h2>
-
-            <div id="eventList"></div>
-
-          </section>
-
         </section>
 
       </section>
@@ -370,24 +385,11 @@
           <small>/ Quản lý thu chi</small>
         </h2>
 
-        <div class="module-menu">
-
-          <div class="module-card">
-            <h2>收入管理 / Thu nhập</h2>
-            <p>Ghi nhận và phân loại thu nhập.</p>
-          </div>
-
-          <div class="module-card">
-            <h2>支出管理 / Chi phí</h2>
-            <p>Ghi nhận và phân loại chi phí.</p>
-          </div>
-
+        <div class="cozy-tabs" role="tablist" aria-label="收支類型 / Loại giao dịch">
+          <button type="button" class="active" data-finance-tab="expense">支出 / Chi</button>
+          <button type="button" data-finance-tab="income">收入 / Thu</button>
         </div>
-
-        <p class="hint">
-          此功能將於下一階段開發。
-          / Chức năng này sẽ được phát triển sau.
-        </p>
+        <p class="hint" id="financePlaceholder">支出管理尚未開放 / Quản lý chi phí đang được phát triển.</p>
 
       </section>
 
@@ -403,14 +405,15 @@
           <small>/ Phân tích hiệu suất</small>
         </h2>
 
-        <h2>
-          目標達成分析
-          <small>/ Hiệu suất mục tiêu</small>
-        </h2>
+        <div class="cozy-tabs" role="tablist" aria-label="目標達成期間 / Kỳ đánh giá">
+          <button type="button" data-performance-tab="day" class="active">每日 / Ngày</button>
+          <button type="button" data-performance-tab="month">每月 / Tháng</button>
+          <button type="button" data-performance-tab="year">每年 / Năm</button>
+        </div>
 
         <div class="performance-grid">
 
-          <div class="performance-card">
+          <div class="performance-card" data-performance-card="day">
 
             <h2>每日目標 / Mục tiêu ngày</h2>
 
@@ -420,7 +423,7 @@
 
           </div>
 
-          <div class="performance-card">
+          <div class="performance-card" data-performance-card="month" hidden>
 
             <h2>月度目標 / Mục tiêu tháng</h2>
 
@@ -430,7 +433,7 @@
 
           </div>
 
-          <div class="performance-card">
+          <div class="performance-card" data-performance-card="year" hidden>
 
             <h2>年度目標 / Mục tiêu năm</h2>
 
@@ -444,19 +447,9 @@
 
       </section>
 
-      <section class="panel" style="margin-top:18px">
-
-        <h2>
-          收支統計
-          <small>/ Thống kê thu chi</small>
-        </h2>
-
-        <p class="hint">
-          待收支管理完成後啟用。
-          / Sẽ phát triển sau khi hoàn thiện quản lý thu chi.
-        </p>
-
-      </section>
+      <details class="cozy-fold cozy-soft"><summary>收支統計 / Thống kê thu chi</summary>
+        <p class="hint">待收支管理完成後啟用 / Sẽ mở khi quản lý thu chi hoàn thiện.</p>
+      </details>
 
     </section>
 
@@ -470,46 +463,15 @@
           <small>/ Cài đặt hệ thống</small>
         </h2>
 
-        <div class="settings-item">
-
-          <h2>
-            帳號與安全
-            <small>/ Tài khoản và bảo mật</small>
-          </h2>
-
-          <p>
-            登入、註冊、裝置管理與密碼安全。
-            / Đăng nhập, đăng ký, quản lý thiết bị và bảo mật.
-          </p>
-
-        </div>
-
-        <div class="settings-item">
-
-          <h2>
-            語言設定
-            <small>/ Ngôn ngữ</small>
-          </h2>
-
-          <p>
-            繁體中文 / Tiếng Việt
-          </p>
-
-        </div>
-
-        <div class="settings-item">
-
-          <h2>
-            資料備份與同步
-            <small>/ Sao lưu và đồng bộ</small>
-          </h2>
-
-          <p>
-            備份資料並同步至不同裝置。
-            / Sao lưu dữ liệu và đồng bộ nhiều thiết bị.
-          </p>
-
-        </div>
+        <details class="cozy-setting"><summary>帳號與安全 / Tài khoản và bảo mật</summary>
+          <p class="hint">登入與裝置管理尚未開放 / Đăng nhập và quản lý thiết bị chưa được phát triển.</p>
+        </details>
+        <details class="cozy-setting"><summary>語言設定 / Ngôn ngữ</summary>
+          <p class="hint">繁體中文 / Tiếng Việt — 目前為雙語介面 / Hiện hiển thị song ngữ.</p>
+        </details>
+        <details class="cozy-setting" id="cozyDataSetting"><summary>資料管理 / Quản lý dữ liệu</summary>
+          <div id="cozyDataTools"></div>
+        </details>
 
       </section>
 

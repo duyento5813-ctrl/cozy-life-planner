@@ -55,3 +55,20 @@ dialog{border:1px solid #edd8c3;border-radius:18px;padding:24px;background:#fffa
 .fin-balance-detail-row>span:nth-child(2),.fin-balance-detail-row>strong{text-align:right}
 .fin-reserved-details p{font-size:12px;line-height:1.6;color:#8d8177;margin:10px 0 0}
 @media(max-width:600px){.fin-available-v3{padding:14px}.fin-balance-totals{gap:12px}.fin-balance-totals strong{font-size:20px}.fin-balance-row{font-size:11px;gap:5px;grid-template-columns:minmax(90px,1.3fr) 1fr 1fr}.fin-balance-detail-row{font-size:10px;gap:5px}}
+
+/* Home panels remain empty without helper or empty-state text. */
+#importantFinanceList:empty{min-height:36px}
+/* Keep the amount field visible in income/expense dialogs. */
+#finFields #f_amount{display:block!important;width:100%;min-height:40px;visibility:visible!important;opacity:1!important}
+
+/* Finance summary shared across all finance tabs */
+#finOverviewAvailable .fin-overview{background:transparent;border:1px solid #eee3d9;margin:8px 0 16px;padding:16px 18px}
+#finOverviewAvailable .fin-balance-totals{padding-bottom:16px}
+#finOverviewAvailable .fin-balance-table{margin-top:2px}
+.fin-inline-category-button{align-self:flex-start;border:1px solid #e9d8ca;background:#fffaf6;color:#865b40;border-radius:12px;padding:9px 13px;cursor:pointer;margin:0 0 8px}
+.fin-inline-category-editor{border:1px solid #eadcd0;border-radius:12px;padding:12px;margin:0 0 10px;background:#fffaf6}
+.fin-inline-category-editor[hidden]{display:none!important}
+.fin-inline-category-editor label{display:block;font-size:13px;color:#66574b}
+.fin-inline-category-editor input{display:block;width:100%;box-sizing:border-box;margin:7px 0}
+.fin-inline-category-editor button{background:#e77c43;color:white;border:0;border-radius:10px;padding:9px 14px;cursor:pointer}
+.fin-field[hidden]{display:none!important}

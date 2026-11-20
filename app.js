@@ -248,7 +248,7 @@ function showPage(page) {
   $("scheduleTasks").hidden = target !== "tasks";
   $("goalsPage").hidden = target !== "goals";
 
-  if (target === "tasks") renderScheduleTasks();
+  if (target === "tasks") { selectedTaskDate=todayKey(); renderScheduleTasks(); }
   if (target === "goals") renderGoals();
 
   if (target === "home") {
@@ -620,7 +620,7 @@ function renderScheduleTasks(){
   const toolbar=document.createElement('div');toolbar.className='cozy-toolbar';
   const date=document.createElement('input');date.type='date';date.value=selectedTaskDate;date.title='選擇日期 / Chọn ngày';
   date.onchange=()=>{if(validDate(date.value)){selectedTaskDate=date.value;renderScheduleTasks();}};
-  toolbar.append(date,makeButton('今天 / Hôm nay',()=>{selectedTaskDate=todayKey();renderScheduleTasks();}),
+  toolbar.append(date,
     makeButton('＋ 新增 / Thêm',()=>makeTaskEditor(box,selectedTaskDate), 'primary'));
   box.append(toolbar);
   const search=document.createElement('div');search.className='cozy-search';
@@ -699,8 +699,7 @@ function renderCalendar(){
     button.className="day"+(dt.getMonth()!==month?" muted":"")+(key===selected?" selected":"");
     const num=document.createElement("span");num.className="num";num.textContent=dt.getDate();button.append(num);
     state.events.filter(e=>e.date===key).slice(0,2).forEach(e=>{const chip=document.createElement("span");chip.className="chip";chip.textContent=`${e.time||""} ${e.name||""}`;button.append(chip);});
-    const tasks=getTasksForDate(key);
-    if(tasks.length){const chip=document.createElement("span");chip.className="chip";chip.textContent=`待辦 ${tasks.filter(t=>isTaskDone(t,key)).length}/${tasks.length}`;button.append(chip);}
+    // The large calendar shows created events only; tasks remain in task lists.
     button.onclick=()=>{selected=key;selectedTaskDate=key;year=dt.getFullYear();month=dt.getMonth();renderCalendar();};$("days").append(button);
   }
   renderEvents();
@@ -818,16 +817,8 @@ function renderGoalPeriodPicker(manager) {
     renderGoals();
   };
 
-  const reset = makeButton(
-    "今天 / Hiện tại",
-    () => {
-      viewing[activeGoalType] = periodKey(activeGoalType);
-      renderGoals();
-    }
-  );
-
   label.append(input);
-  row.append(label, reset);
+  row.append(label);
   manager.append(row);
 }
 
@@ -1018,13 +1009,7 @@ function renderImportantGoals() {
     });
   }
 
-  if (!count) {
-    list.append(
-      emptyMessage(
-        "尚無重要目標 / Chưa có mục tiêu quan trọng"
-      )
-    );
-  }
+  // No starred goals: leave the panel empty.
 }
 
 // ==========================================
@@ -1271,9 +1256,20 @@ initMinimalTabs();
 // FINANCE V1 - independent storage; shared renderers for Finance, Home, Performance.
 (function(){
 'use strict';
-const KEY='cozy-finance-v1', el=id=>document.getElementById(id), now=()=>new Date().toISOString().slice(0,10), uid=()=>crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2);
+const KEY='cozy-finance-v1', el=id=>document.getElementById(id), now=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}, uid=()=>crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2);
 const defaults=()=>({version:1,accounts:[{id:'cash',name:'現金 / Tiền mặt',kind:'cash',currency:'TWD',opening:0},{id:'bank-default',name:'銀行 / Ngân hàng',kind:'bank',currency:'TWD',opening:0}],categories:[{id:'food',name:'餐飲 / Ăn uống',type:'expense',icon:'🍜'},{id:'study',name:'學習 / Học tập',type:'expense',icon:'📚'},{id:'transport',name:'交通 / Đi lại',type:'expense',icon:'🚌'},{id:'home',name:'住房 / Nhà ở',type:'expense',icon:'🏠'},{id:'otherexp',name:'其他支出 / Chi khác',type:'expense',icon:'🧾'},{id:'salary',name:'薪資 / Lương',type:'income',icon:'💼'},{id:'otherinc',name:'其他收入 / Thu khác',type:'income',icon:'💰'}],transactions:[],budgets:[],savings:[],debts:[],recurring:[],rates:{TWD:1},rateDate:'',rateSource:''});
 let data;try{const raw=JSON.parse(localStorage.getItem(KEY));data=raw&&raw.version===1?Object.assign(defaults(),raw):defaults()}catch{data=defaults()}
+// Normalize legacy account kind/type without replacing balances or transaction links.
+for(const a of data.accounts){
+  if(a.kind!=='cash'&&a.kind!=='bank'){
+    const raw=String(a.kind||a.type||'').toLowerCase();
+    a.kind=raw==='cash'||a.id==='cash'||/現金|tiền mặt/i.test(a.name||'')?'cash':'bank';
+  }
+  if(a.opening==null){
+    const original=a.initialBalance??a.openingBalance??a.balance??0;
+    a.opening=Number(original)||0;
+  }
+}
 // Migration for older localStorage: preserve every existing account and transaction.
 // Add a zero-balance bank account only when none exists.
 if(!data.accounts.some(a=>a.kind==='bank')){
@@ -1299,15 +1295,60 @@ function addCurrencyField(){return {name:'currency',label:'幣別 / Tiền tệ'
 function field(f,value){const id='f_'+f.name,required=f.required?'required':'';let input;if(f.type==='select')input=`<select id="${id}" ${required}>${(f.options||[]).map(([v,l])=>`<option value="${esc(v)}" ${String(value)===String(v)?'selected':''}>${esc(l)}</option>`).join('')}</select>`;else if(f.type==='checkbox')input=`<input id="${id}" type="checkbox" ${value?'checked':''}>`;else if(f.type==='textarea')input=`<textarea id="${id}">${esc(value||'')}</textarea>`;else input=`<input id="${id}" type="${f.type||'text'}" value="${esc(value??'')}" ${required} ${f.type==='number'?'min="0" step="any"':''}>`;return `<label class="fin-field">${esc(f.label)}${input}</label>`}
 function dialog(title,fields,values,onSubmit){el('finDialogTitle').textContent=title;el('finFields').innerHTML=fields.map(f=>field(f,values[f.name])).join('');el('finForm').onsubmit=e=>{e.preventDefault();const v={};for(const f of fields){const input=el('f_'+f.name);v[f.name]=f.type==='checkbox'?input.checked:input.value}try{if(onSubmit(v)!==false)el('finDialog').close()}catch(err){alert(err.message)}};el('finDialog').showModal()}
 const opt=(items)=>items.map(x=>[x.id,x.name]);
-function transactionForm(existing=null,defaultsValue={}){const d=Object.assign({type:'expense',date:now(),currency:'TWD',amount:'',name:'',accountId:data.accounts[0]?.id||'',categoryId:'',notes:'',starred:false,repeat:'none'},existing||{},defaultsValue);const fields=[{name:'type',label:'類型 / Loại',type:'select',options:[['expense','支出 / Chi'],['income','收入 / Thu'],['transfer','轉帳 / Chuyển tiền']]},{name:'name',label:'名稱 / Tên giao dịch',required:true},{name:'amount',label:'金額 / Số tiền',type:'number',required:true},addCurrencyField(),{name:'date',label:'日期 / Ngày',type:'date',required:true},{name:'accountId',label:'帳戶 / Tài khoản',type:'select',options:opt(data.accounts)},{name:'toAccountId',label:'轉入帳戶 / Tài khoản nhận (chỉ chuyển tiền)',type:'select',options:[['','—'],...opt(data.accounts)]},{name:'categoryId',label:'分類 / Danh mục',type:'select',options:[['','—'],...opt(data.categories)]},{name:'notes',label:'備註 / Ghi chú',type:'textarea'},{name:'starred',label:'★ 重要 / Quan trọng',type:'checkbox'},{name:'repeat',label:'重複 / Lặp lại (chỉ tạo mới)',type:'select',options:[['none','Không lặp'],['weekly','Mỗi tuần'],['monthly','Mỗi tháng'],['yearly','Mỗi năm']]}];dialog(existing?'編輯交易 / Sửa giao dịch':'新增交易 / Thêm giao dịch',fields,d,v=>{const n=Number(v.amount);if(!(n>0))throw Error('Số tiền phải lớn hơn 0');if(!acct(v.accountId))throw Error('Chọn tài khoản');if(v.type==='transfer'){if(existing)throw Error('Không thể chuyển giao dịch thường thành chuyển khoản');if(!v.toAccountId||v.toAccountId===v.accountId)throw Error('Chọn tài khoản nhận khác tài khoản nguồn');const dest=acct(v.toAccountId),source=acct(v.accountId);if(source.currency!==v.currency)throw Error('Đơn vị tiền phải trùng tài khoản nguồn');const toAmt=source.currency===dest.currency?n:convert(n,source.currency)!=null&&rate(dest.currency)!=null?convert(n,source.currency)/rate(dest.currency):null;if(toAmt==null)throw Error('Cần kết nối mạng để lấy tỷ giá');const group=uid();data.transactions.push({id:uid(),transferId:group,type:'transfer_out',name:v.name,amount:n,currency:source.currency,date:v.date,accountId:source.id,notes:v.notes},{id:uid(),transferId:group,type:'transfer_in',name:v.name,amount:toAmt,currency:dest.currency,date:v.date,accountId:dest.id,notes:v.notes});return save()}
-const account=acct(v.accountId);if(account.currency!==v.currency)throw Error('Tiền tệ giao dịch phải trùng tài khoản. Hãy chọn tài khoản phù hợp.');const converted=convert(n,v.currency);if(converted===null)throw Error('Chưa có tỷ giá '+v.currency+'/TWD. Hãy kết nối Internet và thử lại.');const t={id:existing?.id||uid(),type:v.type,name:v.name.trim(),amount:n,currency:v.currency,twdAmount:converted,date:v.date,accountId:v.accountId,categoryId:v.categoryId,notes:v.notes,starred:v.starred};if(existing)Object.assign(existing,t);else if(v.repeat!=='none'){data.recurring.push({id:uid(),template:t,repeat:v.repeat,nextDate:v.date,confirmed:[]});}else data.transactions.push(t);return save()})}
+function transactionForm(existing=null,defaultsValue={}){const d=Object.assign({type:'expense',date:now(),currency:'TWD',amount:'',name:'',accountId:data.accounts[0]?.id||'',categoryId:'',notes:'',starred:false,repeat:'none'},existing||{},defaultsValue);const fields=[{name:'type',label:'類型 / Loại',type:'select',options:[['expense','支出 / Chi'],['income','收入 / Thu'],['transfer','轉帳 / Chuyển tiền']]},{name:'name',label:'名稱 / Tên giao dịch',required:true},{name:'amount',label:'金額 / Số tiền',type:'number',required:true},addCurrencyField(),{name:'date',label:'日期 / Ngày',type:'date',required:true},{name:'accountId',label:'帳戶 / Tài khoản',type:'select',options:opt(data.accounts)},{name:'toAccountId',label:'轉入帳戶 / Tài khoản nhận (chỉ chuyển tiền)',type:'select',options:[['','—'],...opt(data.accounts)]},{name:'categoryId',label:'分類 / Danh mục',type:'select',options:[['','—'],...opt(data.categories)]},{name:'notes',label:'備註 / Ghi chú',type:'textarea'},{name:'starred',label:'★ 重要 / Quan trọng',type:'checkbox'},{name:'repeat',label:'重複 / Lặp lại (chỉ tạo mới)',type:'select',options:[['none','不重複 / Không lặp'],['weekly','每週 / Mỗi tuần'],['monthly','每月 / Mỗi tháng'],['yearly','每年 / Mỗi năm']]}];dialog(existing?'編輯交易 / Sửa giao dịch':'新增交易 / Thêm giao dịch',fields,d,v=>{const n=Number(v.amount);if(!(n>0))throw Error('Số tiền phải lớn hơn 0');if(!acct(v.accountId))throw Error('Chọn tài khoản');if(v.type==='transfer'){if(existing)throw Error('請新增轉帳交易 / Hãy tạo giao dịch chuyển tiền mới.');if(!v.toAccountId||v.toAccountId===v.accountId)throw Error('Chọn tài khoản nhận khác tài khoản nguồn');const dest=acct(v.toAccountId),source=acct(v.accountId);if(source.currency!==v.currency)throw Error('Đơn vị tiền phải trùng tài khoản nguồn');const toAmt=source.currency===dest.currency?n:convert(n,source.currency)!=null&&rate(dest.currency)!=null?convert(n,source.currency)/rate(dest.currency):null;if(toAmt==null)throw Error('Cần kết nối mạng để lấy tỷ giá');const group=uid();data.transactions.push({id:uid(),transferId:group,type:'transfer_out',name:v.name,amount:n,currency:source.currency,date:v.date,accountId:source.id,notes:v.notes},{id:uid(),transferId:group,type:'transfer_in',name:v.name,amount:toAmt,currency:dest.currency,date:v.date,accountId:dest.id,notes:v.notes});return save()}
+const account=acct(v.accountId);if(account.currency!==v.currency)throw Error('Tiền tệ giao dịch phải trùng tài khoản. Hãy chọn tài khoản phù hợp.');const converted=convert(n,v.currency);if(converted===null)throw Error('Chưa có tỷ giá '+v.currency+'/TWD. Hãy kết nối Internet và thử lại.');const t={id:existing?.id||uid(),type:v.type,name:v.name.trim(),amount:n,currency:v.currency,twdAmount:converted,date:v.date,accountId:v.accountId,categoryId:v.categoryId,notes:v.notes,starred:v.starred};if(existing)Object.assign(existing,t);else if(v.repeat!=='none'){data.recurring.push({id:uid(),template:t,repeat:v.repeat,nextDate:v.date,confirmed:[]});}else data.transactions.push(t);return save()});enhanceTransactionDialog()}
+
+function enhanceTransactionDialog(){
+ const type=el('f_type'),category=el('f_categoryId'),account=el('f_accountId');
+ if(!type||!category)return;
+ const categoryLabel=category.closest('label');
+ const toLabel=el('f_toAccountId')?.closest('label');
+ const addButton=document.createElement('button');addButton.type='button';addButton.className='fin-inline-category-button';addButton.textContent='＋ 新分類 / Danh mục mới';
+ const newBox=document.createElement('div');newBox.className='fin-inline-category-editor';newBox.hidden=true;
+ newBox.innerHTML='<label>分類名稱 / Tên danh mục <input type="text" id="finNewCategoryName" placeholder="名稱 / Tên danh mục"></label><button type="button" id="finSaveNewCategory">新增 / Thêm</button>';
+ categoryLabel.after(addButton,newBox);
+ function sync(){
+  const isTransfer=type.value==='transfer';
+  if(toLabel)toLabel.hidden=!isTransfer;
+  categoryLabel.hidden=isTransfer;addButton.hidden=isTransfer;newBox.hidden=true;
+  const previous=category.value;
+  category.innerHTML='<option value="">—</option>'+data.categories.filter(c=>c.type===type.value).map(c=>`<option value="${esc(c.id)}">${esc(c.icon||'')} ${esc(c.name)}</option>`).join('');
+  if([...category.options].some(o=>o.value===previous))category.value=previous;
+  const a=acct(account.value);if(a&&el('f_currency'))el('f_currency').value=a.currency;
+ }
+ type.addEventListener('change',sync);
+ account.addEventListener('change',()=>{const a=acct(account.value);if(a&&el('f_currency'))el('f_currency').value=a.currency});
+ addButton.onclick=()=>{newBox.hidden=!newBox.hidden;if(!newBox.hidden)el('finNewCategoryName').focus()};
+ el('finSaveNewCategory').onclick=()=>{
+  const name=el('finNewCategoryName').value.trim();if(!name||type.value==='transfer')return;
+  const c={id:uid(),name,type:type.value,icon:'📁'};
+  data.categories.push(c);save();sync();category.value=c.id;newBox.hidden=true;
+ };
+ sync();
+}
 function nextDate(d,repeat){const [y,m,day]=d.split('-').map(Number);const date=new Date(y,m-1,day);if(repeat==='weekly')date.setDate(date.getDate()+7);else if(repeat==='monthly'){const x=new Date(y,m,1);x.setDate(Math.min(day,new Date(y,m+1,0).getDate()));return x.toISOString().slice(0,10)}else{const x=new Date(y+1,m-1,1);x.setDate(Math.min(day,new Date(y+1,m,0).getDate()));return x.toISOString().slice(0,10)}return date.toISOString().slice(0,10)}
 function confirmRecurring(r){const t={...r.template,id:uid(),date:r.nextDate,recurringId:r.id};data.transactions.push(t);r.confirmed.push(r.nextDate);r.nextDate=nextDate(r.nextDate,r.repeat);save()}
 function removeTransaction(t){if(!confirm('確定刪除？ / Xóa giao dịch này?'))return;const ids=t.transferId?data.transactions.filter(x=>x.transferId===t.transferId).map(x=>x.id):[t.id];data.transactions=data.transactions.filter(x=>!ids.includes(x.id));save()}
-function transactionRow(t,home=false){const sign=t.type==='income'||t.type==='transfer_in'?'+':'−';return `<div class="fin-row" data-fin-id="${esc(t.id)}">${home?'':`<button class="fin-star ${t.starred?'active':''}" data-action="star" aria-label="Đánh dấu quan trọng">${t.starred?'★':'☆'}</button>`}<div class="fin-info"><strong>${esc(t.name)}</strong><small>${esc(t.date)} · ${esc(t.type==='income'?'收入 / Thu':t.type==='expense'?'支出 / Chi':'轉帳 / Chuyển tiền')}</small></div><span class="fin-amount ${sign==='+'?'fin-positive':''}">${sign}${money(t.amount,t.currency)}</span>${home?'':`<details class="fin-dots"><summary aria-label="Tùy chọn">⋯</summary><div class="fin-dots-list"><button data-fin-edit="transaction" data-fin-target="${esc(t.id)}">修 / Sửa</button><button data-fin-action="copy" data-fin-target="${esc(t.id)}">複製 / Sao chép</button><button data-fin-delete="transaction" data-fin-target="${esc(t.id)}">刪 / Xóa</button></div></details>`}</div>`}
-function renderImportant(){const root=el('importantFinanceList');if(!root)return;const items=data.transactions.filter(t=>t.starred&&['income','expense'].includes(t.type)&&inPeriod(t.date,now().slice(0,7))).sort((a,b)=>a.date.localeCompare(b.date));root.innerHTML=items.length?items.map(t=>transactionRow(t,true)).join(''):'<p class="fin-empty">本月尚無重要收支 / Tháng này chưa có thu chi quan trọng</p>';}
+function transactionRow(t,home=false){const sign=t.type==='income'||t.type==='transfer_in'?'+':'−';return `<div class="fin-row" data-fin-id="${esc(t.id)}">${home?'':`<button class="fin-star ${t.starred?'active':''}" data-action="star" aria-label="Đánh dấu quan trọng">${t.starred?'★':'☆'}</button>`}<div class="fin-info"><strong>${esc(t.name)}</strong><small>${esc(data.categories.find(c=>c.id===t.categoryId)?.name||'')} · ${esc(t.date)} · ${esc(acct(t.accountId)?.name||'')} · ${esc(t.type==='income'?'收入 / Thu':t.type==='expense'?'支出 / Chi':'轉帳 / Chuyển tiền')}</small></div><span class="fin-amount ${sign==='+'?'fin-positive':''}">${sign}${money(t.amount,t.currency)}</span>${home?'':`<details class="fin-dots"><summary aria-label="Tùy chọn">⋯</summary><div class="fin-dots-list"><button data-fin-edit="transaction" data-fin-target="${esc(t.id)}">編輯 / Sửa</button><button data-fin-action="copy" data-fin-target="${esc(t.id)}">複製 / Sao chép</button><button data-fin-delete="transaction" data-fin-target="${esc(t.id)}">刪除 / Xóa</button></div></details>`}</div>`}
+function renderImportant(){const root=el('importantFinanceList');if(!root)return;const items=data.transactions.filter(t=>t.starred&&['income','expense'].includes(t.type)&&inPeriod(t.date,now().slice(0,7))).sort((a,b)=>a.date.localeCompare(b.date));root.innerHTML=items.map(t=>transactionRow(t,true)).join('');}
 function renderTransactions(){const rows=data.transactions.filter(t=>inPeriod(t.date)&&(!search||[t.name,t.notes,cat(t.categoryId)?.name].join(' ').toLowerCase().includes(search))&&(filter==='all'||t.type===filter)&&(!starOnly||t.starred)).sort((a,b)=>b.date.localeCompare(a.date));el('finList').innerHTML=rows.length?rows.map(t=>transactionRow(t)).join(''):'<p class="fin-empty">尚無交易 / Chưa có giao dịch</p>';const pending=data.recurring.filter(r=>r.nextDate<=now());el('finPending').innerHTML=pending.length?'<h3>待確認 / Chờ xác nhận</h3>'+pending.map(r=>`<div class="fin-row"><div class="fin-info">${esc(r.template.name)}<small>${esc(r.nextDate)} · ${money(r.template.amount,r.template.currency)}</small></div><button data-recurring="${esc(r.id)}">✓ 確認 / Xác nhận</button><button data-skip="${esc(r.id)}">略過 / Bỏ qua</button></div>`).join(''):'';}
-function renderSummary(){el('finMonth').textContent=selectedMonth.replace('-',' / ');const v=totals(periodRows());el('finSummary').innerHTML=`<div class="fin-v2-total"><small>總餘額 · Tổng số dư</small><strong>NT$ ${new Intl.NumberFormat('en-US',{maximumFractionDigits:2}).format(totalBalance())}</strong><p><span class="fin-positive">收入 +${fmt(v.income)}</span>　支出 −${fmt(v.expense)}</p></div>`}
+function renderSummary(){
+ el('finMonth').textContent=selectedMonth.replace('-',' / ');
+ const v=totals(periodRows());
+ el('finSummary').innerHTML=`<div class="fin-v2-total"><p><span class="fin-positive">收入 / Thu +${fmt(v.income)} TWD</span>　<span>支出 / Chi −${fmt(v.expense)} TWD</span></p></div>`;
+ renderOverviewAvailable();
+}
+function renderOverviewAvailable(){
+ const root=el('finOverviewAvailable');if(!root)return;
+ const rows=data.accounts.map(a=>({a,actual:balance(a),available:reserveByAccount(a).available}));
+ const actual=rows.reduce((sum,r)=>sum+(convert(r.actual,r.a.currency)||0),0);
+ const available=rows.reduce((sum,r)=>sum+(convert(r.available,r.a.currency)||0),0);
+ const isCash=a=>a.kind==='cash'||a.type==='cash'||a.id==='cash'||/^(現金|tiền mặt)/i.test(String(a.name||'').trim());
+ const group=items=>({actual:items.reduce((n,r)=>n+(convert(r.actual,r.a.currency)||0),0),available:items.reduce((n,r)=>n+(convert(r.available,r.a.currency)||0),0)});
+ const cash=group(rows.filter(r=>isCash(r.a))),bank=group(rows.filter(r=>!isCash(r.a)));
+ const row=(name,r)=>`<div class="fin-balance-row"><span>${name}</span><span>${fmt(r.actual)}</span><strong>${fmt(r.available)}</strong></div>`;
+ root.innerHTML=`<div class="fin-available fin-available-v3 fin-overview"><div class="fin-balance-totals"><div><small>實際總餘額 / Tổng số dư thực tế</small><strong>${fmt(actual)}</strong><small>TWD</small></div><div><small>實際可用餘額 / Tổng tiền khả dụng</small><strong>${fmt(available)}</strong><small>TWD</small></div></div><div class="fin-balance-table"><div class="fin-balance-row fin-balance-head"><span>帳戶 / Tài khoản</span><span>實際 / Thực tế</span><span>可用 / Khả dụng</span></div>${row('現金 / Tiền mặt',cash)}${row('銀行 / Ngân hàng',bank)}</div></div>`;
+}
 function simpleRows(id,items,html){el(id).innerHTML=items.length?items.map(html).join(''):'<p class="fin-empty">尚無資料 / Chưa có dữ liệu</p>'}
 function renderManage(){simpleRows('finAccounts',data.accounts,a=>`<div class="fin-row"><div class="fin-info"><strong>${esc(a.name)}</strong><small>${esc(a.currency)}</small></div><strong>${money(balance(a),a.currency)}</strong><button data-edit-account="${esc(a.id)}">⋯</button></div>`);simpleRows('finBudgets',data.budgets,b=>{const spent=budgetSpent(b),limit=Number(b.limit)+(b.rollover?budgetRollover(b):0);return `<div class="fin-row"><div class="fin-info"><strong>${esc(b.name)}</strong><small>${esc(b.period)} · ${fmt(spent)} / ${fmt(limit)}</small><div class="fin-progress"><span style="width:${Math.min(100,limit?spent/limit*100:0)}%"></span></div></div><button data-edit-budget="${esc(b.id)}">⋯</button></div>`});simpleRows('finSavings',data.savings,s=>`<div class="fin-row"><div class="fin-info"><strong>${esc(s.name)}</strong><small>${fmt(s.allocated)} / ${fmt(s.target)} · ${s.goalRef?'🔗 '+esc(s.goalRef):''}</small><div class="fin-progress"><span style="width:${Math.min(100,s.target?s.allocated/s.target*100:0)}%"></span></div></div><button data-add-saving="${esc(s.id)}">＋</button><button data-edit-saving="${esc(s.id)}">⋯</button></div>`);simpleRows('finDebts',data.debts,d=>`<div class="fin-row"><div class="fin-info"><strong>${esc(d.name)}</strong><small>${esc(d.kind==='lent'?'Cho vay':'Đi vay')} · Còn ${money(d.principal-d.paid,d.currency)}</small></div><button data-pay-debt="${esc(d.id)}">Thanh toán</button><button data-edit-debt="${esc(d.id)}">⋯</button></div>`);simpleRows('finCategories',data.categories,x=>`<div class="fin-row"><div class="fin-info">${esc(x.icon||'📁')} ${esc(x.name)} <small>${esc(x.type)}</small></div><button data-edit-category="${esc(x.id)}">⋯</button></div>`)}
 function budgetWindow(b,offset=0){const d=new Date();if(b.period==='week'){const mon=new Date(d);mon.setDate(mon.getDate()-(mon.getDay()+6)%7+offset*7);return [mon.toISOString().slice(0,10),new Date(mon.getTime()+7*86400000).toISOString().slice(0,10)]}if(b.period==='year')return [String(d.getFullYear()+offset)+'-01-01',String(d.getFullYear()+offset+1)+'-01-01'];const start=new Date(d.getFullYear(),d.getMonth()+offset,1),end=new Date(d.getFullYear(),d.getMonth()+offset+1,1);return [start.toISOString().slice(0,10),end.toISOString().slice(0,10)]}
@@ -1316,15 +1357,16 @@ function budgetRollover(b){return Math.max(0,Number(b.limit)-budgetSpent(b,-1))}
 function reportRows(period,reference){return data.transactions.filter(t=>['income','expense'].includes(t.type)&&t.date.slice(0,period==='day'?10:period==='month'?7:4)===reference)}
 
 let finSection='planning', reportPeriod='month', reportAccount='all';
-function finMenu(type,id,extra=''){return `<details class="fin-dots"><summary aria-label="Tùy chọn">⋯</summary><div class="fin-dots-list"><button data-fin-edit="${esc(type)}" data-fin-target="${esc(id)}">修 / Sửa</button>${extra}<button data-fin-delete="${esc(type)}" data-fin-target="${esc(id)}">刪 / Xóa</button></div></details>`}
-function reserveByAccount(a){const saved=data.savings.reduce((n,s)=>n+(s.accountId===a.id?Number(s.allocated||0):0),0);const budget=data.budgets.reduce((n,b)=>n+(b.reserve&&b.accountId===a.id?Math.max(0,Number(b.reservedAmount||0)-budgetSpent(b)):0),0);const debts=data.debts.reduce((n,d)=>n+(d.kind==='borrowed'&&d.reserve&&d.reserveAccountId===a.id?Math.max(0,Number(d.principal)-Number(d.paid)):0),0);return {saved,budget,debts,available:balance(a)-saved-budget-debts}}
+function finMenu(type,id,extra=''){return `<details class="fin-dots"><summary aria-label="Tùy chọn">⋯</summary><div class="fin-dots-list"><button data-fin-edit="${esc(type)}" data-fin-target="${esc(id)}">編輯 / Sửa</button>${extra}<button data-fin-delete="${esc(type)}" data-fin-target="${esc(id)}">刪除 / Xóa</button></div></details>`}
+function reserveByAccount(a){const saved=data.savings.reduce((n,s)=>n+(s.accountId===a.id?Number(s.allocated||0):0),0);const budget=data.budgets.reduce((n,b)=>n+(b.accountId===a.id?Math.max(0,Number(b.accumulated??b.reservedAmount??0)||0):0),0);const debts=data.debts.reduce((n,d)=>n+(d.kind==='borrowed'&&d.reserve&&d.reserveAccountId===a.id?Math.max(0,Number(d.principal)-Number(d.paid)):0),0);return {saved,budget,debts,available:balance(a)-saved-budget-debts}}
 function renderAvailable(){
   const rows=data.accounts.map(a=>({a,...reserveByAccount(a),actual:balance(a)}));
   const totalActual=rows.reduce((n,r)=>n+(convert(r.actual,r.a.currency)||0),0);
   const totalAvailable=rows.reduce((n,r)=>n+(convert(r.available,r.a.currency)||0),0);
   const totalReserved=rows.reduce((n,r)=>n+(convert(r.saved+r.budget+r.debts,r.a.currency)||0),0);
-  const cashRows=rows.filter(r=>r.a.type==='cash');
-  const bankRows=rows.filter(r=>r.a.type==='bank');
+  const isCashAccount=a=>a.kind==='cash'||a.type==='cash'||a.id==='cash'||/^(現金|tiền mặt)/i.test(String(a.name||'').trim());
+  const cashRows=rows.filter(r=>isCashAccount(r.a));
+  const bankRows=rows.filter(r=>!isCashAccount(r.a));
   const group=(items)=>({
     actual:items.reduce((n,r)=>n+(convert(r.actual,r.a.currency)||0),0),
     available:items.reduce((n,r)=>n+(convert(r.available,r.a.currency)||0),0)
@@ -1342,15 +1384,35 @@ function renderAvailable(){
       ${row('現金 / Tiền mặt',cash)}
       ${row('銀行 / Ngân hàng',bank)}
     </div>
-    <details class="fin-reserved-details"><summary>已保留 / Tiền dành riêng: ${fmt(totalReserved)} TWD <span aria-hidden="true">⌄</span></summary>
+    <details class="fin-reserved-details"><summary>已累積及分配總額 / Tổng đã tích lũy và phân bổ: ${fmt(totalReserved)} TWD <span aria-hidden="true">⌄</span></summary>
       <div class="fin-reserved-breakdown">${detailRows||'<small>尚無帳戶 / Chưa có tài khoản</small>'}</div>
-      <p>Tiền dành riêng vẫn nằm trong số dư thực tế nhưng không tính vào tiền có thể sử dụng tự do.</p>
+      <p>已累積金額會從指定帳戶的可用餘額扣除。 / Tiền tích lũy được trừ khỏi khả dụng của đúng tài khoản, không trừ khỏi số dư thực tế.</p>
     </details>
   </div>`;
 }
 
-function renderPlans(){const plans=[...data.budgets.map(b=>({kind:'budget',item:b})),...data.savings.map(s=>({kind:'saving',item:s})),...data.debts.map(d=>({kind:'debt',item:d}))];el('finPlans').innerHTML=plans.length?plans.map(({kind,item:x})=>{let label='',detail='',progress='';if(kind==='budget'){const spent=budgetSpent(x),limit=Number(x.limit)+(x.rollover?budgetRollover(x):0);label='▥';detail=`${fmt(spent)} / ${fmt(limit)}${x.reserve?' · 保留 / Giữ riêng':''}`;progress=`<div class="fin-progress"><span style="width:${Math.min(100,limit?spent/limit*100:0)}%"></span></div>`}else if(kind==='saving'){label='♧';detail=`${fmt(x.allocated)} / ${fmt(x.target)} · ${x.target?Math.round(x.allocated/x.target*100):0}%`;progress=`<div class="fin-progress"><span style="width:${Math.min(100,x.target?x.allocated/x.target*100:0)}%"></span></div>`}else{label='♧';detail=`${x.kind==='lent'?'應收 / Phải thu':'應付 / Phải trả'} · ${money(x.principal-x.paid,x.currency)}`};const acc=acct(x.accountId||x.reserveAccountId);return `<div class="fin-plan-item"><div class="fin-plan-line"><span class="fin-plan-icon">${label}</span><div class="fin-info"><strong>${esc(x.name)}</strong><small>${detail}${acc?' · '+esc(acc.name):''}</small></div>${finMenu(kind,x.id,kind==='saving'?`<button data-fin-action="allocate" data-fin-target="${esc(x.id)}">＋ 存入 / Phân bổ</button>`:kind==='debt'?`<button data-fin-action="repay" data-fin-target="${esc(x.id)}">＋ 還款 / Trả nợ</button>`:'')}</div>${progress}</div>`}).join(''):'<p class="fin-empty">尚無計畫 / Chưa có kế hoạch</p>'}
-function renderV2(){renderAvailable();renderPlans();el('finAccounts').innerHTML=data.accounts.map(a=>`<div class="fin-row"><div class="fin-info"><strong>${esc(a.name)}</strong><small>${esc(a.currency)} · 可用 / Khả dụng: ${money(reserveByAccount(a).available,a.currency)}</small></div><b>${money(balance(a),a.currency)}</b>${finMenu('account',a.id)}</div>`).join('');el('finCategories').innerHTML=data.categories.map(c=>`<div class="fin-row"><div class="fin-info">${esc(c.icon||'')} ${esc(c.name)}</div>${finMenu('category',c.id)}</div>`).join('');const sel=el('finReportAccount');if(sel){const old=sel.value;sel.innerHTML='<option value="all">全部 / Tất cả</option>'+data.accounts.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');sel.value=data.accounts.some(a=>a.id===old)?old:'all';reportAccount=sel.value}}
+function renderPlans(){
+ const plans=[...data.budgets.map(item=>({kind:'budget',item})),...data.savings.map(item=>({kind:'saving',item})),...data.debts.map(item=>({kind:'debt',item}))];
+ el('finPlans').innerHTML=plans.length?plans.map(({kind,item:x})=>{
+  let label='',detail='',progress='';
+  if(kind==='budget'){
+   const accumulated=Number(x.accumulated??x.reservedAmount??0),goal=Number(x.limit||0);
+   label='▥';
+   const unit={day:'天 / ngày',week:'週 / tuần',month:'月 / tháng',year:'年 / năm'}[x.durationUnit||x.period]||'月 / tháng';
+   detail=`預算 / Ngân sách · 已累積 / Đã tích lũy: ${fmt(accumulated)} / ${fmt(goal)} TWD · 累積期間 / Chu kỳ: ${fmt(x.durationCount||1)} ${unit}`;
+   progress=`<div class="fin-progress"><span style="width:${Math.min(100,goal?accumulated/goal*100:0)}%"></span></div>`;
+  }else if(kind==='saving'){
+   label='♧';detail=`儲蓄 / Tiết kiệm · 已累積 / Đã tích lũy: ${fmt(x.allocated)} / ${fmt(x.target)} TWD`;
+   progress=`<div class="fin-progress"><span style="width:${Math.min(100,x.target?x.allocated/x.target*100:0)}%"></span></div>`;
+  }else{
+   label='♧';detail=`債務 / Công nợ · ${x.kind==='lent'?'應收 / Phải thu':'應付 / Phải trả'}: ${money(x.principal-x.paid,x.currency)}`;
+  }
+  const acc=acct(x.accountId||x.reserveAccountId);
+  return `<div class="fin-plan-item"><div class="fin-plan-line"><span class="fin-plan-icon">${label}</span><div class="fin-info"><strong>${esc(x.name)}</strong><small>${detail}${acc?' · '+esc(acc.name):''}</small></div>${finMenu(kind,x.id,kind==='saving'?`<button data-fin-action="allocate" data-fin-target="${esc(x.id)}">＋ 存入 / Phân bổ</button>`:kind==='debt'?`<button data-fin-action="repay" data-fin-target="${esc(x.id)}">＋ 還款 / Trả nợ</button>`:'')}</div>${progress}</div>`;
+ }).join(''):'<p class="fin-empty">尚無計畫 / Chưa có kế hoạch</p>';
+}
+
+function renderV2(){renderAvailable();renderPlans();el('finAccounts').innerHTML=data.accounts.map(a=>`<div class="fin-row"><div class="fin-info"><strong>${esc(a.name)}</strong><small>實際 / Thực tế: ${money(balance(a),a.currency)} · 可用 / Khả dụng: ${money(reserveByAccount(a).available,a.currency)}</small></div><b>${money(balance(a),a.currency)}</b>${finMenu('account',a.id)}</div>`).join('');el('finCategories').innerHTML=data.categories.map(c=>`<div class="fin-row"><div class="fin-info">${esc(c.icon||'')} ${esc(c.name)}</div>${finMenu('category',c.id)}</div>`).join('');const sel=el('finReportAccount');if(sel){const old=sel.value;sel.innerHTML='<option value="all">全部 / Tất cả</option>'+data.accounts.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');sel.value=data.accounts.some(a=>a.id===old)?old:'all';reportAccount=sel.value}}
 function svgBar(values){const max=Math.max(1,...values.flatMap(x=>[x.income,x.expense]));const w=540,h=230,base=190,space=500/Math.max(1,values.length);return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Biểu đồ cột thu nhập và chi tiêu" class="fin-svg"><line x1="24" y1="${base}" x2="535" y2="${base}" stroke="#d6c8bc"/>${values.map((x,i)=>{const center=30+(i+.5)*space,hi=155*x.income/max,he=155*x.expense/max;return `<rect x="${center-20}" y="${base-hi}" width="17" height="${hi}" rx="3" fill="#76a68a"><title>Thu: ${fmt(x.income)}</title></rect><rect x="${center+2}" y="${base-he}" width="17" height="${he}" rx="3" fill="#d49a72"><title>Chi: ${fmt(x.expense)}</title></rect><text x="${center}" y="211" text-anchor="middle" font-size="11" fill="currentColor">${esc(x.label)}</text>`}).join('')}</svg>`}
 function svgPie(groups){const entries=Object.entries(groups).filter(([,n])=>n>0),total=entries.reduce((n,[,v])=>n+v,0);if(!total)return '<p class="fin-empty">尚無支出 / Chưa có chi tiêu</p>';const colors=['#d49a72','#76a68a','#b2a0c9','#e5c46b','#88b9c2','#c68b91'];let pos=0;const slices=entries.map(([name,val],i)=>{const start=pos;pos+=val/total;return `${colors[i%colors.length]} ${start*100}% ${pos*100}%`});return `<div class="fin-pie-layout"><div class="fin-pie" role="img" aria-label="Biểu đồ tròn phân loại chi tiêu" style="background:conic-gradient(${slices.join(',')})"></div><div class="fin-pie-legend">${entries.map(([name,val],i)=>`<div><i style="background:${colors[i%colors.length]}"></i><span>${esc(name)}</span><b>${Math.round(val/total*100)}%</b></div>`).join('')}</div></div>`}
 function financeChartData(period='month',account='all'){const base=new Date(),out=[];for(let i=4;i>=0;i--){let from,to,label;if(period==='year'){const y=base.getFullYear()-i;from=`${y}-01-01`;to=`${y+1}-01-01`;label=String(y)}else if(period==='day'){const d=new Date(base.getFullYear(),base.getMonth(),base.getDate()-i);from=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');const next=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);to=next.getFullYear()+'-'+String(next.getMonth()+1).padStart(2,'0')+'-'+String(next.getDate()).padStart(2,'0');label=String(d.getMonth()+1)+'/'+d.getDate()}else{const d=new Date(base.getFullYear(),base.getMonth()-i,1);from=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01';const next=new Date(d.getFullYear(),d.getMonth()+1,1);to=next.getFullYear()+'-'+String(next.getMonth()+1).padStart(2,'0')+'-01';label=String(d.getMonth()+1)}const v=totals(data.transactions.filter(t=>t.date>=from&&t.date<to&&(account==='all'||t.accountId===account)&&['income','expense'].includes(t.type)));out.push({label,...v})}return out}
@@ -1362,9 +1424,9 @@ function openAccount(a){
   // Cash is a single permanent account; additional accounts are bank accounts.
   const isCash=a?.kind==='cash';
   dialog(isCash?'現金 / Tiền mặt':a?'銀行帳戶 / Sửa ngân hàng':'新增銀行帳戶 / Thêm ngân hàng',[
-    {name:'name',label:'Tên tài khoản',required:true},
+    {name:'name',label:'帳戶名稱 / Tên tài khoản',required:true},
     addCurrencyField(),
-    {name:'opening',label:'Số dư ban đầu',type:'number'}
+    {name:'opening',label:'期初餘額 / Số dư ban đầu',type:'number'}
   ],a||{name:'銀行 / Ngân hàng',currency:'TWD',opening:0},v=>{
     if(a){
       if(a.currency!==v.currency&&data.transactions.some(t=>t.accountId===a.id))throw Error('Không đổi tiền tệ tài khoản đã có giao dịch');
@@ -1373,15 +1435,38 @@ function openAccount(a){
     save();refreshRates();
   });
 }
-function openCategory(a){dialog('分類 / Danh mục',[{name:'name',label:'Tên',required:true},{name:'type',label:'Loại',type:'select',options:[['expense','Chi'],['income','Thu']]},{name:'icon',label:'Biểu tượng'}],a||{name:'',type:'expense',icon:'📁'},v=>{if(a)Object.assign(a,v);else data.categories.push({...v,id:uid()});save()})}
-function openBudget(a){dialog('預算 / Ngân sách',[{name:'name',label:'Tên',required:true},{name:'limit',label:'Hạn mức TWD',type:'number',required:true},{name:'period',label:'Chu kỳ',type:'select',options:[['week','Tuần'],['month','Tháng'],['year','Năm']]},{name:'categoryId',label:'Danh mục',type:'select',options:[['','Tất cả'],...opt(data.categories.filter(x=>x.type==='expense'))]},{name:'rollover',label:'Chuyển hạn mức dư',type:'checkbox'},{name:'reserve',label:'Giữ riêng ngân sách khỏi tiền khả dụng',type:'checkbox'},{name:'accountId',label:'Tài khoản dành riêng',type:'select',options:[['','Không chọn'],...opt(data.accounts)]},{name:'reservedAmount',label:'Số tiền giữ riêng (TWD)',type:'number'}],a||{name:'',limit:'',period:'month',categoryId:'',rollover:false},v=>{if(a)Object.assign(a,{...v,limit:Number(v.limit),reservedAmount:Number(v.reservedAmount||0)});else data.budgets.push({...v,limit:Number(v.limit),reservedAmount:Number(v.reservedAmount||0),id:uid()});save()})}
-function openSaving(a){dialog('儲蓄目標 / Mục tiêu tiết kiệm',[{name:'name',label:'Tên',required:true},{name:'target',label:'Mục tiêu TWD',type:'number',required:true},{name:'goalRef',label:'ID mục tiêu tháng/năm (tùy chọn)'},{name:'accountId',label:'Tài khoản dành tiền',type:'select',options:opt(data.accounts)}],a||{name:'',target:'',goalRef:'',accountId:data.accounts[0]?.id},v=>{if(a)Object.assign(a,{...v,target:Number(v.target)});else data.savings.push({...v,id:uid(),target:Number(v.target),allocated:0});save()})}
+function openCategory(a){dialog('分類 / Danh mục thu chi',[{name:'name',label:'名稱 / Tên',required:true},{name:'type',label:'類型 / Loại',type:'select',options:[['expense','支出 / Chi'],['income','收入 / Thu']]},{name:'icon',label:'圖示 / Biểu tượng'}],a||{name:'',type:'expense',icon:'📁'},v=>{if(a)Object.assign(a,v);else data.categories.push({...v,id:uid()});save()})}
+function openBudget(a){
+ dialog('預算 / Ngân sách',[
+  {name:'name',label:'名稱 / Tên kế hoạch',required:true},
+  {name:'limit',label:'目標金額 / Hạn mức muốn đạt (TWD)',type:'number',required:true},
+  {name:'durationCount',label:'累積期數 / Số chu kỳ tích lũy',type:'number',required:true},
+  {name:'durationUnit',label:'時間單位 / Đơn vị chu kỳ',type:'select',options:[['day','天 / Ngày'],['week','週 / Tuần'],['month','月 / Tháng'],['year','年 / Năm']]},
+  {name:'accumulated',label:'已累積金額 / Đã tích lũy (TWD)',type:'number',required:true},
+  {name:'accountId',label:'累積帳戶 / Tài khoản tích lũy',type:'select',options:opt(data.accounts.filter(x=>x.currency==='TWD'))}
+ ],a?{...a,accumulated:a.accumulated??a.reservedAmount??0,durationCount:a.durationCount||1,durationUnit:a.durationUnit||a.period||'month'}:{name:'',limit:'',durationCount:1,durationUnit:'month',accumulated:0,accountId:data.accounts.find(x=>x.currency==='TWD')?.id||''},v=>{
+  const limit=Number(v.limit),accumulated=Number(v.accumulated),durationCount=Number(v.durationCount);
+  if(!Number.isFinite(limit)||limit<=0||!Number.isFinite(accumulated)||accumulated<0||accumulated>limit||!Number.isInteger(durationCount)||durationCount<=0)throw Error('請輸入有效數字 / Nhập số hợp lệ; tiền tích lũy không vượt mục tiêu.');
+  const account=acct(v.accountId);
+  if(!account||account.currency!=='TWD')throw Error('請選擇新臺幣帳戶 / Chọn tài khoản TWD.');
+  const previous=a?Number(a.accumulated??a.reservedAmount??0):0;
+  const oldAccount=a?acct(a.accountId):null;
+  const increase=accumulated-(oldAccount?.id===account.id?previous:0);
+  const available=reserveByAccount(account).available;
+  if(increase>available+0.000001)throw Error('可用餘額不足 / Tiền khả dụng không đủ.');
+  const updated={...v,limit,accumulated,durationCount,reservedAmount:accumulated,reserve:true,rollover:false,period:v.durationUnit};
+  if(a)Object.assign(a,updated);else data.budgets.push({...updated,id:uid()});
+  save();
+ });
+}
+
+function openSaving(a){dialog('儲蓄目標 / Mục tiêu tiết kiệm',[{name:'name',label:'名稱 / Tên',required:true},{name:'target',label:'儲蓄目標 / Mục tiêu (TWD)',type:'number',required:true},{name:'goalRef',label:'月／年目標 ID / ID mục tiêu tháng/năm (tùy chọn)'},{name:'accountId',label:'儲蓄帳戶 / Tài khoản tiết kiệm',type:'select',options:opt(data.accounts)}],a||{name:'',target:'',goalRef:'',accountId:data.accounts[0]?.id},v=>{if(a)Object.assign(a,{...v,target:Number(v.target)});else data.savings.push({...v,id:uid(),target:Number(v.target),allocated:0});save()})}
 function addSaving(s){dialog('分配儲蓄 / Phân bổ tiết kiệm',[{name:'amount',label:'Số tiền TWD (âm để rút)',type:'number',required:true}],{amount:''},v=>{const n=Number(v.amount);if(!Number.isFinite(n)||!n)throw Error('Nhập số tiền hợp lệ');if(s.allocated+n<0)throw Error('Không thể rút quá số tiền đã dành');if(n>0&&(!acct(s.accountId)||acct(s.accountId).currency!=='TWD'||reserveByAccount(acct(s.accountId)).available<n))throw Error('Không đủ tiền khả dụng');s.allocated+=n;save()})}
-function openDebt(a){dialog('債務 / Công nợ',[{name:'name',label:'Tên người/khoản nợ',required:true},{name:'kind',label:'Loại',type:'select',options:[['lent','Cho vay'],['borrowed','Đi vay']]},{name:'principal',label:'Số tiền gốc',type:'number',required:true},addCurrencyField(),{name:'accountId',label:'Tài khoản giải ngân/nhận tiền',type:'select',options:[['','Chưa phát sinh dòng tiền'],...opt(data.accounts)]},{name:'reserve',label:'Dành riêng tiền để trả nợ',type:'checkbox'},{name:'reserveAccountId',label:'Tài khoản dự kiến trả nợ',type:'select',options:[['','Không chọn'],...opt(data.accounts)]}],a||{name:'',kind:'lent',principal:'',currency:'TWD',accountId:''},v=>{if(a){if(Number(v.principal)<a.paid)throw Error('Gốc không nhỏ hơn đã thanh toán');Object.assign(a,{...v,principal:Number(v.principal)})}else{const d={...v,id:uid(),principal:Number(v.principal),paid:0};data.debts.push(d);if(v.accountId){const account=acct(v.accountId);if(account.currency!==v.currency)throw Error('Tiền tệ phải trùng tài khoản');data.transactions.push({id:uid(),type:v.kind==='lent'?'debt_out':'debt_in',name:v.name,amount:Number(v.principal),currency:v.currency,date:now(),accountId:v.accountId,debtId:d.id})}}save()})}
+function openDebt(a){dialog('債務 / Công nợ',[{name:'name',label:'名稱 / Tên người hoặc khoản nợ',required:true},{name:'kind',label:'類型 / Loại',type:'select',options:[['lent','Cho vay'],['borrowed','Đi vay']]},{name:'principal',label:'本金 / Số tiền gốc',type:'number',required:true},addCurrencyField(),{name:'accountId',label:'Tài khoản giải ngân/nhận tiền',type:'select',options:[['','Chưa phát sinh dòng tiền'],...opt(data.accounts)]},{name:'reserve',label:'Dành riêng tiền để trả nợ',type:'checkbox'},{name:'reserveAccountId',label:'Tài khoản dự kiến trả nợ',type:'select',options:[['','Không chọn'],...opt(data.accounts)]}],a||{name:'',kind:'lent',principal:'',currency:'TWD',accountId:''},v=>{if(a){if(Number(v.principal)<a.paid)throw Error('Gốc không nhỏ hơn đã thanh toán');Object.assign(a,{...v,principal:Number(v.principal)})}else{const d={...v,id:uid(),principal:Number(v.principal),paid:0};data.debts.push(d);if(v.accountId){const account=acct(v.accountId);if(account.currency!==v.currency)throw Error('Tiền tệ phải trùng tài khoản');data.transactions.push({id:uid(),type:v.kind==='lent'?'debt_out':'debt_in',name:v.name,amount:Number(v.principal),currency:v.currency,date:now(),accountId:v.accountId,debtId:d.id})}}save()})}
 function payDebt(d){dialog('償還 / Thanh toán',[{name:'amount',label:'Số tiền thanh toán',type:'number',required:true},{name:'accountId',label:'Tài khoản',type:'select',options:opt(data.accounts)}],{amount:'',accountId:data.accounts[0]?.id},v=>{const n=Number(v.amount),a=acct(v.accountId);if(!(n>0&&n<=d.principal-d.paid))throw Error('Số tiền vượt số dư nợ');if(a.currency!==d.currency)throw Error('Tài khoản phải cùng tiền tệ với khoản nợ');d.paid+=n;data.transactions.push({id:uid(),type:d.kind==='lent'?'debt_in':'debt_out',name:'Thanh toán: '+d.name,amount:n,currency:d.currency,date:now(),accountId:a.id,debtId:d.id});save()})}
 function download(name,content,type){const a=document.createElement('a'),url=URL.createObjectURL(new Blob([content],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 function csv(){const header=['date','type','name','amount','currency','twdAmount','account','category','notes','starred'];const lines=[header.join(','),...data.transactions.map(t=>header.map(k=>`"${String(k==='account'?acct(t.accountId)?.name||'':k==='category'?cat(t.categoryId)?.name||'':t[k]??'').replace(/"/g,'""')}"`).join(','))];download('cozy-finance.csv','\uFEFF'+lines.join('\r\n'),'text/csv;charset=utf-8')}
-function wire(){el('finCancel').onclick=()=>el('finDialog').close();el('finAdd').onclick=()=>transactionForm();el('finPrev').onclick=()=>moveMonth(-1);el('finNext').onclick=()=>moveMonth(1);document.querySelectorAll('[data-fin-view]').forEach(b=>b.onclick=()=>{view=b.dataset.finView;document.querySelectorAll('[data-fin-view]').forEach(x=>x.classList.toggle('active',x===b));el('finTransactions').hidden=view==='report';el('finReport').hidden=view!=='report';el('finManage').hidden=true});el('finSearch').oninput=e=>{search=e.target.value.toLowerCase();renderTransactions()};el('finFilter').onclick=()=>el('finFilterOptions').hidden=!el('finFilterOptions').hidden;el('finType').onchange=e=>{filter=e.target.value;renderTransactions()};el('finOnlyStar').onchange=e=>{starOnly=e.target.checked;renderTransactions()};el('finAddAccount').onclick=()=>openAccount();el('finAddBudget').onclick=()=>openBudget();el('finAddSaving').onclick=()=>openSaving();el('finAddDebt').onclick=()=>openDebt();el('finAddCategory').onclick=()=>openCategory();el('finAddPlan').onclick=()=>{dialog('新增計畫 / Thêm kế hoạch',[{name:'kind',label:'Loại kế hoạch',type:'select',options:[['budget','預算 / Ngân sách'],['saving','儲蓄 / Tiết kiệm'],['debt','債務 / Công nợ']]}],{kind:'budget'},v=>{queueMicrotask(()=>({budget:openBudget,saving:openSaving,debt:openDebt}[v.kind])());return true})};document.querySelectorAll('[data-fin-section]').forEach(b=>b.onclick=()=>{finSection=b.dataset.finSection;document.querySelectorAll('[data-fin-section]').forEach(x=>x.classList.toggle('active',x===b));['transactions','planning','accounts'].forEach(x=>el('fin'+x[0].toUpperCase()+x.slice(1)+'Inner').hidden=x!==finSection)});el('finReportPeriod').onchange=e=>{reportPeriod=e.target.value;renderReport()};el('finReportAccount').onchange=e=>{reportAccount=e.target.value;renderReport()};el('finExportCsv').onclick=csv;el('finBackup').onclick=()=>download('cozy-finance-backup.json',JSON.stringify(data,null,2),'application/json');el('finRestore').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const value=JSON.parse(await file.text());if(value.version!==1||!Array.isArray(value.transactions)||!Array.isArray(value.accounts)||!Array.isArray(value.categories))throw Error('Sai định dạng');if(confirm('Nhập sẽ thay thế toàn bộ dữ liệu Thu chi hiện tại. Tiếp tục?')){data=value;save()}}catch(err){alert('Không nhập được: '+err.message)}e.target.value=''};
+function wire(){el('finCancel').onclick=()=>el('finDialog').close();el('finAdd').onclick=()=>transactionForm();el('finPrev').onclick=()=>moveMonth(-1);el('finNext').onclick=()=>moveMonth(1);document.querySelectorAll('[data-fin-view]').forEach(b=>b.onclick=()=>{view=b.dataset.finView;document.querySelectorAll('[data-fin-view]').forEach(x=>x.classList.toggle('active',x===b));el('finTransactions').hidden=view==='report';el('finReport').hidden=view!=='report';el('finManage').hidden=true});el('finSearch').oninput=e=>{search=e.target.value.toLowerCase();renderTransactions()};el('finFilter').onclick=()=>el('finFilterOptions').hidden=!el('finFilterOptions').hidden;el('finType').onchange=e=>{filter=e.target.value;renderTransactions()};el('finOnlyStar').onchange=e=>{starOnly=e.target.checked;renderTransactions()};el('finAddAccount').onclick=()=>openAccount();el('finAddBudget').onclick=()=>openBudget();el('finAddSaving').onclick=()=>openSaving();el('finAddDebt').onclick=()=>openDebt();el('finAddCategory').onclick=()=>openCategory();el('finAddPlan').onclick=()=>{dialog('新增計畫 / Thêm kế hoạch',[{name:'kind',label:'計畫類型 / Loại kế hoạch',type:'select',options:[['budget','預算 / Ngân sách'],['saving','儲蓄 / Tiết kiệm'],['debt','債務 / Công nợ']]}],{kind:'budget'},v=>{queueMicrotask(()=>({budget:openBudget,saving:openSaving,debt:openDebt}[v.kind])());return true})};document.querySelectorAll('[data-fin-section]').forEach(b=>b.onclick=()=>{finSection=b.dataset.finSection;document.querySelectorAll('[data-fin-section]').forEach(x=>x.classList.toggle('active',x===b));['transactions','planning','accounts'].forEach(x=>el('fin'+x[0].toUpperCase()+x.slice(1)+'Inner').hidden=x!==finSection)});el('finReportPeriod').onchange=e=>{reportPeriod=e.target.value;renderReport()};el('finReportAccount').onchange=e=>{reportAccount=e.target.value;renderReport()};el('finExportCsv').onclick=csv;el('finBackup').onclick=()=>download('cozy-finance-backup.json',JSON.stringify(data,null,2),'application/json');el('finRestore').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const value=JSON.parse(await file.text());if(value.version!==1||!Array.isArray(value.transactions)||!Array.isArray(value.accounts)||!Array.isArray(value.categories))throw Error('Sai định dạng');if(confirm('Nhập sẽ thay thế toàn bộ dữ liệu Thu chi hiện tại. Tiếp tục?')){data=value;save()}}catch(err){alert('Không nhập được: '+err.message)}e.target.value=''};
 document.addEventListener('click',e=>{const b=e.target.closest('[data-fin-edit],[data-fin-delete],[data-fin-action]');if(!b)return;const type=b.dataset.finEdit||b.dataset.finDelete, id=b.dataset.finTarget, action=b.dataset.finAction;if(action==='copy'){const t=data.transactions.find(x=>x.id===id);if(t)transactionForm(null,{...t,id:undefined,repeat:'none'});return}if(action==='allocate'){const s=data.savings.find(x=>x.id===id);if(s)addSaving(s);return}if(action==='repay'){const d=data.debts.find(x=>x.id===id);if(d)payDebt(d);return}const arr={transaction:data.transactions,account:data.accounts,budget:data.budgets,saving:data.savings,debt:data.debts,category:data.categories}[type];const obj=arr?.find(x=>x.id===id);if(!obj)return;if(b.dataset.finEdit){({transaction:transactionForm,account:openAccount,budget:openBudget,saving:openSaving,debt:openDebt,category:openCategory}[type])(obj);return}if(!confirm('確定刪除？ / Xác nhận xóa '+obj.name+'?'))return;if(type==='transaction'){const ids=obj.transferId?data.transactions.filter(x=>x.transferId===obj.transferId).map(x=>x.id):[obj.id];data.transactions=data.transactions.filter(x=>!ids.includes(x.id));save();return}if(type==='account'&&obj.kind==='cash'){alert('Tài khoản Tiền mặt là tài khoản mặc định, chỉ có thể sửa.');return}if(type==='account'&&data.transactions.some(t=>t.accountId===id)){alert('Tài khoản đang có giao dịch; không thể xóa.');return}if(type==='category'&&data.transactions.some(t=>t.categoryId===id)){alert('Danh mục đang được sử dụng; không thể xóa.');return}if(type==='debt'&&data.transactions.some(t=>t.debtId===id)){alert('Công nợ đã phát sinh dòng tiền; cần xử lý giao dịch liên quan trước.');return}data[type==='account'?'accounts':type==='budget'?'budgets':type==='saving'?'savings':type==='debt'?'debts':'categories']=arr.filter(x=>x.id!==id);save()});
 document.addEventListener('click',e=>{const b=e.target.closest('[data-action],[data-recurring],[data-skip],[data-edit-account],[data-edit-budget],[data-edit-saving],[data-add-saving],[data-edit-debt],[data-pay-debt],[data-edit-category]');if(!b)return;const t=data.transactions.find(x=>x.id===b.closest('[data-fin-id]')?.dataset.finId);if(b.dataset.action==='star'&&t){t.starred=!t.starred;save()}else if(b.dataset.action==='menu'&&t){const action=prompt('1 = Sửa, 2 = Sao chép, 3 = Xóa','1');if(action==='1'){if(t.transferId)alert('Chuyển khoản chỉ hỗ trợ xóa và tạo lại');else transactionForm(t)}if(action==='2')transactionForm(null,{...t,id:undefined,repeat:'none'});if(action==='3')removeTransaction(t)}else if(b.dataset.recurring){const r=data.recurring.find(x=>x.id===b.dataset.recurring);if(r)confirmRecurring(r)}else if(b.dataset.skip){const r=data.recurring.find(x=>x.id===b.dataset.skip);if(r){r.nextDate=nextDate(r.nextDate,r.repeat);save()}}else if(b.dataset.editAccount)openAccount(acct(b.dataset.editAccount));else if(b.dataset.editBudget)openBudget(data.budgets.find(x=>x.id===b.dataset.editBudget));else if(b.dataset.editSaving)openSaving(data.savings.find(x=>x.id===b.dataset.editSaving));else if(b.dataset.addSaving)addSaving(data.savings.find(x=>x.id===b.dataset.addSaving));else if(b.dataset.editDebt)openDebt(data.debts.find(x=>x.id===b.dataset.editDebt));else if(b.dataset.payDebt)payDebt(data.debts.find(x=>x.id===b.dataset.payDebt));else if(b.dataset.editCategory)openCategory(cat(b.dataset.editCategory));});
 el('importantFinanceList').addEventListener('click',e=>{const id=e.target.closest('[data-fin-id]')?.dataset.finId;if(id){location.hash='#future';view='transactions';document.querySelector('[data-fin-view="transactions"]').click();search='';el('finSearch').value='';renderTransactions();setTimeout(()=>document.querySelector(`[data-fin-id="${CSS.escape(id)}"]`)?.scrollIntoView({block:'center'}),100)}});

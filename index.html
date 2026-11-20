@@ -385,12 +385,17 @@
           <small>/ Quản lý thu chi</small>
         </h2>
 
-        <div class="fin-period"><button id="finPrev" type="button" aria-label="Tháng trước">‹</button><strong id="finMonth"></strong><button id="finNext" type="button" aria-label="Tháng sau">›</button><button id="finAdd" type="button" class="fin-primary">＋ 新增 / Thêm</button></div>
+        <div class="fin-period"><button id="finPrev" type="button">‹</button><strong id="finMonth"></strong><button id="finNext" type="button">›</button></div>
         <div class="fin-summary" id="finSummary"></div>
-        <div class="cozy-tabs fin-tabs"><button class="active" data-fin-view="transactions">交易紀錄 / Giao dịch</button><button data-fin-view="manage">財務管理 / Quản lý</button><button data-fin-view="report">統計報表 / Thống kê</button></div>
-        <div id="finTransactions" class="fin-view"><div class="fin-search"><input id="finSearch" placeholder="搜尋交易 / Tìm giao dịch" aria-label="Tìm giao dịch"><button id="finFilter" title="Lọc">☷</button></div><div id="finFilterOptions" hidden><select id="finType"><option value="all">全部 / Tất cả</option><option value="income">收入 / Thu</option><option value="expense">支出 / Chi</option></select><label><input type="checkbox" id="finOnlyStar"> ★ 重要 / Quan trọng</label></div><div id="finPending"></div><div id="finList"></div></div>
-        <div id="finManage" class="fin-view" hidden><details open><summary>帳戶 / Tài khoản</summary><div id="finAccounts"></div><button id="finAddAccount">＋ 新增帳戶 / Thêm tài khoản</button></details><details><summary>預算 / Ngân sách</summary><div id="finBudgets"></div><button id="finAddBudget">＋ 新增預算 / Thêm ngân sách</button></details><details><summary>儲蓄 / Tiết kiệm</summary><div id="finSavings"></div><button id="finAddSaving">＋ 新增目標 / Thêm mục tiêu</button></details><details><summary>債務 / Công nợ</summary><div id="finDebts"></div><button id="finAddDebt">＋ 新增債務 / Thêm khoản nợ</button></details><details><summary>分類 / Danh mục</summary><div id="finCategories"></div><button id="finAddCategory">＋ 新增分類 / Thêm danh mục</button></details></div>
-        <div id="finReport" class="fin-view" hidden><div id="finReportContent"></div><button id="finExportCsv">匯出 CSV / Xuất CSV</button></div>
+        <div class="fin-v2-tabs"><button class="active" data-fin-view="transactions">管理 / Quản lý</button><button data-fin-view="report">統計 / Thống kê</button></div>
+        <div id="finTransactions" class="fin-view">
+          <div class="fin-v2-subtabs"><button data-fin-section="transactions">收支 · Thu chi</button><button class="active" data-fin-section="planning">計畫 · Kế hoạch</button><button data-fin-section="accounts">帳戶 · Tài khoản</button></div>
+          <div id="finTransactionsInner" class="fin-v2-section" hidden><div class="fin-v2-heading"><h3>交易紀錄 / Giao dịch</h3><button id="finAdd" class="fin-primary">＋ 新增</button></div><div class="fin-search"><input id="finSearch" placeholder="搜尋交易 / Tìm giao dịch"><button id="finFilter" title="Bộ lọc">☷</button></div><div id="finFilterOptions" hidden><select id="finType"><option value="all">全部 / Tất cả</option><option value="income">收入 / Thu</option><option value="expense">支出 / Chi</option></select><label><input type="checkbox" id="finOnlyStar"> ★ 重要 / Quan trọng</label></div><div id="finPending"></div><div id="finList"></div></div>
+          <div id="finPlanningInner" class="fin-v2-section"><div class="fin-v2-heading"><h3>財務計畫 / Kế hoạch tài chính</h3><button id="finAddPlan" class="fin-primary">＋ 新增</button></div><div id="finAvailable"></div><div id="finPlans"></div></div>
+          <div id="finAccountsInner" class="fin-v2-section" hidden><div class="fin-v2-heading"><h3>帳戶 / Tài khoản</h3><button id="finAddAccount" class="fin-primary">＋ 新增</button></div><div id="finAccounts"></div><div class="fin-v2-heading"><h3>分類 / Danh mục</h3><button id="finAddCategory">＋ 新增</button></div><div id="finCategories"></div></div>
+          <div id="finManage" hidden><div id="finBudgets"></div><button id="finAddBudget">＋</button><div id="finSavings"></div><button id="finAddSaving">＋</button><div id="finDebts"></div><button id="finAddDebt">＋</button></div>
+        </div>
+        <div id="finReport" class="fin-view" hidden><div class="fin-v2-report-controls"><label>期間 / Kỳ <select id="finReportPeriod"><option value="month">月 / Tháng</option><option value="day">日 / Ngày</option><option value="year">年 / Năm</option></select></label><label>帳戶 / Tài khoản <select id="finReportAccount"><option value="all">全部 / Tất cả</option></select></label></div><div id="finReportContent"></div><button id="finExportCsv">匯出 CSV / Xuất CSV</button></div>
         <details class="fin-data"><summary>資料管理 / Dữ liệu tài chính</summary><button id="finBackup">匯出 JSON / Sao lưu</button><label>匯入 JSON / Khôi phục <input type="file" id="finRestore" accept=".json,application/json"></label><p class="hint">資料儲存在此瀏覽器 / Dữ liệu lưu trong trình duyệt này.</p></details>
         <dialog id="finDialog" class="fin-dialog"><form id="finForm" method="dialog"><h3 id="finDialogTitle"></h3><div id="finFields"></div><div class="fin-actions"><button type="button" id="finCancel">取消 / Hủy</button><button type="submit" class="fin-primary">儲存 / Lưu</button></div></form></dialog>
       </section>
@@ -450,7 +455,7 @@
       </section>
 
       <details class="cozy-fold cozy-soft"><summary>收支統計 / Thống kê thu chi</summary>
-        <div id="finPerformanceStats"></div>
+        <div id="finPerformanceStats"></div><div id="finPerformanceCharts" class="fin-performance-charts"></div>
       </details>
 
     </section>

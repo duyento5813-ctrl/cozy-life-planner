@@ -1374,7 +1374,7 @@ function renderAvailable(){
   const cash=group(cashRows),bank=group(bankRows);
   const row=(label,r)=>`<div class="fin-balance-row"><span>${label}</span><span>${fmt(r.actual)}</span><strong>${fmt(r.available)}</strong></div>`;
   const detailRows=rows.map(r=>`<div class="fin-balance-detail-row"><span>${esc(r.a.name)}</span><span>${money(r.actual,r.a.currency)}</span><strong>${money(r.available,r.a.currency)}</strong></div>`).join('');
-  el('finAvailable').innerHTML=`<div class="fin-available fin-available-v3">
+  if(!el('finAvailable'))return;el('finAvailable').innerHTML=`<div class="fin-available fin-available-v3">
     <div class="fin-balance-totals">
       <div><small>實際總餘額 / Tổng số dư thực tế</small><strong>${fmt(totalActual)}</strong><small>TWD</small></div>
       <div><small>實際可用餘額 / Tổng tiền khả dụng</small><strong class="${totalAvailable<0?'fin-balance-negative':''}">${fmt(totalAvailable)}</strong><small>TWD</small></div>
@@ -1393,7 +1393,7 @@ function renderAvailable(){
 
 function renderPlans(){
  const plans=[...data.budgets.map(item=>({kind:'budget',item})),...data.savings.map(item=>({kind:'saving',item})),...data.debts.map(item=>({kind:'debt',item}))];
- el('finPlans').innerHTML=plans.length?plans.map(({kind,item:x})=>{
+ if(!el('finPlans'))return;el('finPlans').innerHTML=plans.length?plans.map(({kind,item:x})=>{
   let label='',detail='',progress='';
   if(kind==='budget'){
    const accumulated=Number(x.accumulated??x.reservedAmount??0),goal=Number(x.limit||0);
@@ -1412,18 +1412,18 @@ function renderPlans(){
  }).join(''):'<p class="fin-empty">尚無計畫 / Chưa có kế hoạch</p>';
 }
 
-function renderV2(){renderAvailable();renderPlans();el('finAccounts').innerHTML=data.accounts.map(a=>`<div class="fin-row"><div class="fin-info"><strong>${esc(a.name)}</strong><small>實際 / Thực tế: ${money(balance(a),a.currency)} · 可用 / Khả dụng: ${money(reserveByAccount(a).available,a.currency)}</small></div><b>${money(balance(a),a.currency)}</b>${finMenu('account',a.id)}</div>`).join('');const sel=el('finReportAccount');if(sel){const old=sel.value;sel.innerHTML='<option value="all">全部 / Tất cả</option>'+data.accounts.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');sel.value=data.accounts.some(a=>a.id===old)?old:'all';reportAccount=sel.value}}
+function renderV2(){renderAvailable();renderPlans();if(!el('finAccounts'))return;el('finAccounts').innerHTML=data.accounts.map(a=>`<div class="fin-row"><div class="fin-info"><strong>${esc(a.name)}</strong><small>實際 / Thực tế: ${money(balance(a),a.currency)} · 可用 / Khả dụng: ${money(reserveByAccount(a).available,a.currency)}</small></div><b>${money(balance(a),a.currency)}</b>${finMenu('account',a.id)}</div>`).join('');const sel=el('finReportAccount');if(sel){const old=sel.value;sel.innerHTML='<option value="all">全部 / Tất cả</option>'+data.accounts.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');sel.value=data.accounts.some(a=>a.id===old)?old:'all';reportAccount=sel.value}}
 function svgBar(values){const max=Math.max(1,...values.flatMap(x=>[x.income,x.expense]));const w=540,h=230,base=190,space=500/Math.max(1,values.length);return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Biểu đồ cột thu nhập và chi tiêu" class="fin-svg"><line x1="24" y1="${base}" x2="535" y2="${base}" stroke="#d6c8bc"/>${values.map((x,i)=>{const center=30+(i+.5)*space,hi=155*x.income/max,he=155*x.expense/max;return `<rect x="${center-20}" y="${base-hi}" width="17" height="${hi}" rx="3" fill="#76a68a"><title>Thu: ${fmt(x.income)}</title></rect><rect x="${center+2}" y="${base-he}" width="17" height="${he}" rx="3" fill="#d49a72"><title>Chi: ${fmt(x.expense)}</title></rect><text x="${center}" y="211" text-anchor="middle" font-size="11" fill="currentColor">${esc(x.label)}</text>`}).join('')}</svg>`}
 function svgPie(groups){const entries=Object.entries(groups).filter(([,n])=>n>0),total=entries.reduce((n,[,v])=>n+v,0);if(!total)return '<p class="fin-empty">尚無支出 / Chưa có chi tiêu</p>';const colors=['#d49a72','#76a68a','#b2a0c9','#e5c46b','#88b9c2','#c68b91'];let pos=0;const slices=entries.map(([name,val],i)=>{const start=pos;pos+=val/total;return `${colors[i%colors.length]} ${start*100}% ${pos*100}%`});return `<div class="fin-pie-layout"><div class="fin-pie" role="img" aria-label="Biểu đồ tròn chi tiêu theo tên giao dịch" style="background:conic-gradient(${slices.join(',')})"></div><div class="fin-pie-legend">${entries.map(([name,val],i)=>`<div><i style="background:${colors[i%colors.length]}"></i><span>${esc(name)}</span><b>${Math.round(val/total*100)}%</b></div>`).join('')}</div></div>`}
 function financeChartData(period='month',account='all'){const base=new Date(),out=[];for(let i=4;i>=0;i--){let from,to,label;if(period==='year'){const y=base.getFullYear()-i;from=`${y}-01-01`;to=`${y+1}-01-01`;label=String(y)}else if(period==='day'){const d=new Date(base.getFullYear(),base.getMonth(),base.getDate()-i);from=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');const next=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);to=next.getFullYear()+'-'+String(next.getMonth()+1).padStart(2,'0')+'-'+String(next.getDate()).padStart(2,'0');label=String(d.getMonth()+1)+'/'+d.getDate()}else{const d=new Date(base.getFullYear(),base.getMonth()-i,1);from=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01';const next=new Date(d.getFullYear(),d.getMonth()+1,1);to=next.getFullYear()+'-'+String(next.getMonth()+1).padStart(2,'0')+'-01';label=String(d.getMonth()+1)}const v=totals(data.transactions.filter(t=>t.date>=from&&t.date<to&&(account==='all'||t.accountId===account)&&['income','expense'].includes(t.type)));out.push({label,...v})}return out}
 function chartMarkup(period='month',account='all'){const rows=data.transactions.filter(t=>t.type==='expense'&&(account==='all'||t.accountId===account)&&t.date.slice(0,period==='day'?10:period==='year'?4:7)===(period==='month'?selectedMonth:now().slice(0,period==='day'?10:4)));const groups={};rows.forEach(t=>{const name=(t.name||'未命名 / Chưa đặt tên').trim();groups[name]=(groups[name]||0)+(amountTwd(t)||0)});return `<h3>收入與支出 / Thu nhập và chi tiêu</h3><div class="fin-chart-key"><span>● 收入 / Thu</span><span>● 支出 / Chi</span></div>${svgBar(financeChartData(period,account))}<h3>支出項目分析 / Phân tích chi tiêu theo tên giao dịch</h3>${svgPie(groups)}`}
-function renderReport(){el('finReportContent').innerHTML=chartMarkup(reportPeriod,reportAccount)}
+function renderReport(){if(!el('finReportContent'))return;el('finReportContent').innerHTML=chartMarkup(reportPeriod,reportAccount)}
 function renderPerformanceFinance(){const root=el('finPerformanceStats');if(!root)return;root.innerHTML=['day','month','year'].map(type=>{const key=now().slice(0,type==='day'?10:type==='month'?7:4),v=totals(reportRows(type,key));return `<div class="fin-row"><div class="fin-info"><strong>${{day:'每日 / Ngày',month:'每月 / Tháng',year:'每年 / Năm'}[type]}</strong><small>收入 ${fmt(v.income)} · 支出 ${fmt(v.expense)}</small></div><strong>${fmt(v.income-v.expense)}</strong></div>`}).join('');const charts=el('finPerformanceCharts');if(charts)charts.innerHTML=chartMarkup('month','all')}
-function render(){renderImportant();renderPerformanceFinance();if(!el('finSummary'))return;renderSummary();renderTransactions();renderManage();renderV2();renderReport()}
+function render(){renderImportant();renderPerformanceFinance();if(!el('finSummary'))return;renderSummary();renderTransactions();renderV2();renderReport()}
 function openAccount(a){
   // Cash is a single permanent account; additional accounts are bank accounts.
   const isCash=a?.kind==='cash';
-  dialog(isCash?'現金 / Tiền mặt':a?'銀行帳戶 / Sửa ngân hàng':'新增銀行帳戶 / Thêm ngân hàng',[
+  dialog(isCash?'編輯現金帳戶 / Sửa tài khoản tiền mặt':a?'編輯銀行帳戶 / Sửa tài khoản ngân hàng':'新增銀行帳戶 / Thêm ngân hàng',[
     {name:'name',label:'帳戶名稱 / Tên tài khoản',required:true},
     addCurrencyField(),
     {name:'opening',label:'期初餘額 / Số dư ban đầu',type:'number'}

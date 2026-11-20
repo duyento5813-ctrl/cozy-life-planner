@@ -357,7 +357,8 @@ function setTaskDone(task,key,done) {
   } else {
     delete task.completions[original];delete task.completedAt[original];
   }
-  if (save()) refreshTaskViews();
+  syncDailyGoal(task,key);
+  if (save()) refreshLinkedGoalViews();
 }
 function makeField(labelText,type,value="") {
   const label=document.createElement("label"); label.textContent=labelText;
@@ -461,7 +462,8 @@ function makeTaskEditor(container, date, task=null, mode="all") {
           completions:{},completedAt:{},skippedDates:[],moved:{},excludedDates:[],overrides:{}});
       }
     }
-    if(save())refreshTaskViews();
+    if(task)syncDailyGoal(task,date);
+    if(save())refreshLinkedGoalViews();
   };
   container.append(form);name.input.focus();
 }
@@ -518,6 +520,28 @@ function deleteTask(task,date) {
   }
   if(save())refreshTaskViews();
 }
+// Liên kết tự động: một công việc được đánh sao = một mục tiêu của ngày đó.
+function linkedDailyGoal(task,key) {
+  return state.goalLists.day.find(g=>g.linkedTaskId===task.id && g.period===key);
+}
+function syncDailyGoal(task,key) {
+  const existing=linkedDailyGoal(task,key);
+  const important=taskImportant(task,key);
+  if (!important) {
+    if(existing) state.goalLists.day=state.goalLists.day.filter(g=>g!==existing);
+    return;
+  }
+  const done=isTaskDone(task,key);
+  if(existing) {
+    Object.assign(existing,{name:taskName(task,key),done,progress:done?100:0,important:true});
+  } else {
+    state.goalLists.day.push({id:makeId(),period:key,name:taskName(task,key),done,
+      progress:done?100:0,important:true,linkedTaskId:task.id});
+  }
+}
+function refreshLinkedGoalViews() {
+  refreshTaskViews();refreshGoals();
+}
 function createTaskRow(task,key){
   const wrapper=document.createElement('div');
   const row=document.createElement('div');row.className='cozy-task-row';
@@ -531,7 +555,8 @@ function createTaskRow(task,key){
     const origin=taskOrigin(task,key);
     if(task.repeat==='none')task.important=!task.important;
     else task.overrides[origin]={...task.overrides[origin],important:!taskImportant(task,key)};
-    if(save())refreshTaskViews();
+    syncDailyGoal(task,key);
+    if(save())refreshLinkedGoalViews();
   },'goal-star'+(taskImportant(task,key)?' starred':''));
   star.title='重要 / Quan trọng';
   const menu=document.createElement('details');
@@ -607,6 +632,15 @@ function renderScheduleTasks(){
   const summary=document.createElement('p');summary.className='goal-summary';box.append(summary);
   function draw(){
     const key=selectedTaskDate;
+    // Tự liên kết các công việc đã đánh dấu sao từ bản trước.
+    let linkedChanged=false;
+    for(const t of getTasksForDate(key)) if(taskImportant(t,key)) {
+      const g=linkedDailyGoal(t,key);
+      if(!g || g.name!==taskName(t,key) || g.done!==isTaskDone(t,key)) {
+        syncDailyGoal(t,key);linkedChanged=true;
+      }
+    }
+    if(linkedChanged){save();renderImportantGoals();renderPerformance();}
     const tasks=getTasksForDate(key).filter(t=>taskName(t,key).toLocaleLowerCase().includes(taskSearch.toLocaleLowerCase()));
     results.replaceChildren();
     if(!tasks.length)results.append(emptyMessage('沒有符合的待辦 / Không có công việc phù hợp'));
@@ -860,8 +894,16 @@ function renderGoals() {
     checkbox.onchange = () => {
       goal.done = checkbox.checked;
       goal.progress = goal.done ? 100 : 0;
-      save();
-      refreshGoals();
+      if(goal.linkedTaskId) {
+        const task=state.tasks.find(t=>t.id===goal.linkedTaskId);
+        if(task) {
+          const origin=taskOrigin(task,goal.period);
+          task.completions ||= {};task.completedAt ||= {};task.skippedDates ||= [];
+          if(goal.done){task.completions[origin]=true;task.completedAt[origin]=new Date().toISOString();task.skippedDates=task.skippedDates.filter(d=>d!==origin);}
+          else {delete task.completions[origin];delete task.completedAt[origin];}
+        }
+      }
+      if(save())refreshLinkedGoalViews();
     };
 
     const star = makeButton(

@@ -66,6 +66,64 @@ async function upload(table, value, oldTimestamp, uid) {
   if (!data?.length) throw Error('Dữ liệu đám mây đã thay đổi. Đồng bộ tạm dừng để tránh ghi đè.');
   return data[0].updated_at;
 }
+// Explicit conflict resolution. Never overwrite cloud data without a deliberate choice.
+function conflictPanel(show) {
+  let panel = $('cozyConflictPanel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'cozyConflictPanel';
+    panel.style.cssText = 'margin:12px 0;padding:14px;border:1px solid #e8c6a9;border-radius:14px;background:#fff7ec;max-width:520px';
+    const heading = document.createElement('strong');
+    heading.textContent = '資料衝突 / Dữ liệu khác nhau';
+    const explanation = document.createElement('p');
+    explanation.textContent = 'Hai bản dữ liệu khác nhau. Chọn dùng dữ liệu đám mây nếu muốn bỏ dữ liệu thử nghiệm trên máy này.';
+    explanation.style.cssText = 'font-size:13px;line-height:1.6';
+    const useCloud = document.createElement('button');
+    useCloud.type = 'button'; useCloud.textContent = '使用雲端資料 / Dùng dữ liệu đám mây';
+    useCloud.className = 'primary';
+    useCloud.onclick = () => resolveWithCloud(useCloud);
+    const keepLocal = document.createElement('button');
+    keepLocal.type = 'button'; keepLocal.textContent = '保留本機資料 / Giữ dữ liệu máy';
+    keepLocal.style.marginLeft = '8px';
+    keepLocal.onclick = () => { panel.hidden = true; message('Đã giữ dữ liệu trên máy; đồng bộ vẫn tạm dừng.'); };
+    panel.append(heading, explanation, useCloud, keepLocal);
+    const anchor = $('cozySyncStatus') || $('cozySyncNow');
+    if (anchor) anchor.insertAdjacentElement('afterend', panel);
+    else document.body.append(panel);
+  }
+  panel.hidden = !show;
+}
+
+async function resolveWithCloud(button) {
+  if (!user || !paused || busy) return;
+  if (!confirm('Dữ liệu THỬ NGHIỆM trên trình duyệt này sẽ được thay bằng dữ liệu Supabase. Dữ liệu đám mây KHÔNG bị xóa. Tiếp tục?')) return;
+  const uid = user.id, g = generation;
+  busy = true; button.disabled = true;
+  status('正在取得雲端資料 / Đang lấy dữ liệu đám mây...');
+  try {
+    // Read and validate ALL cloud rows before changing ANY local data.
+    const remote = {};
+    for (const table of TABLES) {
+      remote[table] = await remoteRow(table, uid);
+      if (remote[table] && !validate(table, remote[table].data)) throw Error('Dữ liệu đám mây không hợp lệ: ' + table);
+    }
+    if (generation !== g || user?.id !== uid) throw Error('Tài khoản đã thay đổi; vui lòng thử lại.');
+    backup(); // Download another backup immediately before replacement.
+    for (const table of TABLES) {
+      if (remote[table]) setLocal(table, remote[table].data);
+      else localStorage.removeItem(localKey(table)); // Cloud has no row: discard local test data.
+    }
+    conflictPanel(false);
+    status('已採用雲端資料 / Đã dùng dữ liệu đám mây');
+    location.reload(); // Reload app state from the new local cache.
+  } catch (e) {
+    console.error('Cozy cloud resolution:', e);
+    status('處理失敗 / Không thể giải quyết xung đột');
+    message(e.message);
+    button.disabled = false;
+  } finally { busy = false; }
+}
+
 async function sync() {
   if (!user || busy || paused || !navigator.onLine) return;
   const uid = user.id, currentGeneration = generation;
@@ -89,15 +147,11 @@ async function sync() {
       if (!validate(table,remote.data)) throw Error('Dữ liệu đám mây không hợp lệ: ' + table);
       if (prior === undefined) {
         if (current !== null && raw !== JSON.stringify(remote.data)) {
-          paused = true; backup();
+          paused = true;
           status('資料衝突 / Dữ liệu máy và đám mây khác nhau');
-          const useCloud = confirm('Đã tải bản sao lưu dữ liệu máy.\nOK: dùng dữ liệu ĐÁM MÂY trên máy này.\nCancel: GIỮ NGUYÊN dữ liệu máy và tạm dừng đồng bộ.');
-          if (!useCloud) { message('Đồng bộ tạm dừng. Dữ liệu trên máy được giữ nguyên.'); return; }
-          setLocal(table,remote.data); needReload ||= table !== 'user_preferences';
-          if (table === 'user_preferences') applyPrefs();
-          baseline[table] = remote.updated_at; lastLocal[table] = JSON.stringify(remote.data);
-          paused = false;
-          continue;
+          conflictPanel(true);
+          message('Hãy chọn dữ liệu đám mây hoặc giữ dữ liệu máy ở phần Đồng bộ.');
+          return;
         }
         if (current === null) {
           setLocal(table,remote.data); needReload ||= table !== 'user_preferences';
@@ -109,7 +163,7 @@ async function sync() {
       }
       const localChanged = raw !== lastLocal[table], remoteChanged = remote.updated_at !== prior;
       if (localChanged && remoteChanged) {
-        paused = true; backup();
+        paused = true; backup(); conflictPanel(true);
         throw Error('Cả máy và đám mây đều đã thay đổi. Đã tải bản sao lưu; đồng bộ tạm dừng.');
       }
       if (remoteChanged) {
@@ -133,7 +187,7 @@ async function initUser(u) {
   const uid = u?.id || null;
   if (uid === user?.id) return;
   generation++; if (poll) { clearInterval(poll); poll = null; }
-  user = u || null; baseline = {}; lastLocal = {}; paused = false; showAuth();
+  user = u || null; baseline = {}; lastLocal = {}; paused = false; conflictPanel(false); showAuth();
   if (!user) { status('尚未登入 / Chưa đăng nhập'); return; }
   const owner = localStorage.getItem(OWNERKEY);
   if (owner && owner !== uid) {
@@ -231,7 +285,7 @@ async function init() {
     if (error) message(error.message); else location.reload();
   };
   if ($('cozySyncNow')) $('cozySyncNow').onclick = () => {
-    if (paused) { message('Đồng bộ đang tạm dừng do xung đột hoặc tài khoản khác. Không thể tự động bỏ qua để tránh mất dữ liệu.'); return; }
+    if (paused) { message('Đồng bộ tạm dừng. Nếu có xung đột, hãy chọn một phương án trong khung bên dưới.'); return; }
     sync();
   };
   client.auth.onAuthStateChange((event,session) => {

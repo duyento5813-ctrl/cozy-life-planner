@@ -389,62 +389,45 @@
     </section>
 
     <!-- 4. PHÂN TÍCH HIỆU SUẤT -->
-    <section id="performancePage" class="app-page" hidden>
-
-      <section class="panel">
-
-        <h2>
-          效率分析
-          <small>/ Phân tích hiệu suất</small>
-        </h2>
-
-        <div class="cozy-tabs" role="tablist" aria-label="目標達成期間 / Kỳ đánh giá">
-          <button type="button" data-performance-tab="day" class="active">每日 / Ngày</button>
-          <button type="button" data-performance-tab="month">每月 / Tháng</button>
-          <button type="button" data-performance-tab="year">每年 / Năm</button>
-        </div>
-
-        <div class="performance-grid">
-
-          <div class="performance-card" data-performance-card="day">
-
-            <h2>每日目標 / Mục tiêu ngày</h2>
-
-            <div class="donut" id="dayDonut">
-              <span id="dayPct">0%</span>
-            </div>
-
-          </div>
-
-          <div class="performance-card" data-performance-card="month" hidden>
-
-            <h2>月度目標 / Mục tiêu tháng</h2>
-
-            <div class="donut" id="monthDonut">
-              <span id="monthPct">0%</span>
-            </div>
-
-          </div>
-
-          <div class="performance-card" data-performance-card="year" hidden>
-
-            <h2>年度目標 / Mục tiêu năm</h2>
-
-            <div class="donut" id="yearDonut">
-              <span id="yearPct">0%</span>
-            </div>
-
-          </div>
-
-        </div>
-
-      </section>
-
-      <details class="cozy-fold cozy-soft"><summary>收支統計 / Thống kê thu chi</summary>
-        <div id="finPerformanceStats"></div><div id="finPerformanceCharts" class="fin-performance-charts"></div>
-      </details>
-
-    </section>
+<section id="performancePage" class="app-page" hidden>
+  <section class="panel">
+    <h2>效率分析 <small>/ Phân tích hiệu suất</small></h2>
+    <div class="cozy-tabs" id="effMainTabs">
+      <button type="button" data-eff-main="report" class="active">綜合分析報告 / Báo cáo</button>
+      <button type="button" data-eff-main="lab">生活實驗室 / Mô phỏng</button>
+    </div>
+    <div id="effReport">
+      <div class="eff-filters">
+        <label>期間 / Kỳ <select id="effPeriod"><option value="day">日 / Ngày</option><option value="month" selected>月 / Tháng</option><option value="year">年 / Năm</option></select></label>
+        <label>日期 / Thời gian <input id="effDate" type="month"></label>
+        <button id="effSaveReport" type="button">儲存報告 / Lưu báo cáo</button>
+      </div>
+      <div id="effSummary" class="eff-cards"></div>
+      <div class="eff-columns">
+        <section class="eff-panel"><h3>目標分析 / Mục tiêu</h3><div id="effGoals"></div></section>
+        <section class="eff-panel"><h3>任務分析 / Công việc</h3><div id="effTasks"></div></section>
+      </div>
+      <section class="eff-panel"><h3>財務分析 / Tài chính</h3><div id="effFinance"></div></section>
+      <section class="eff-panel"><h3>綜合判斷 / Nhận định</h3><div id="effInsights"></div></section>
+      <section class="eff-panel"><h3>未來預測 / Dự tính</h3><div id="effForecast"></div></section>
+      <details class="eff-panel"><summary>歷史報告 / Báo cáo đã lưu</summary><div id="effSaved"></div></details>
+    </div>
+    <div id="effLab" hidden>
+      <div class="eff-lab-grid">
+        <label>每月收入 / Thu nhập tháng (TWD)<input id="effIncome" type="number" step="0.01" min="0" value="12407"></label>
+        <label>每月支出 / Chi tiêu tháng (TWD)<input id="effExpense" type="number" step="0.01" min="0" value="9000"></label>
+        <label>可用時間 / Thời gian mỗi ngày (giờ)<input id="effHours" type="number" step="1" min="0" max="24" value="2"></label>
+        <label>分鐘 / Phút<input id="effMinutes" type="number" step="1" min="0" max="59" value="30"></label>
+        <label>任務數量 / Số công việc<input id="effWork" type="number" step="1" min="0" value="12"></label>
+        <label>每項耗時 / Phút mỗi việc<input id="effDuration" type="number" step="1" min="1" value="45"></label>
+        <label>模擬天數 / Số ngày<input id="effDays" type="number" step="1" min="1" value="30"></label>
+      </div>
+      <div id="effSimulation" class="eff-panel"></div>
+      <div class="eff-filters"><input id="effScenarioName" placeholder="方案名稱 / Tên phương án" maxlength="60"><button type="button" id="effSaveScenario">儲存方案 / Lưu</button></div>
+      <div id="effScenarios"></div>
+    </div>
+  </section>
+</section>
 
     <!-- 5. CÀI ĐẶT -->
     <section id="settingsPage" class="app-page" hidden>

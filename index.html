@@ -440,14 +440,17 @@
         <section class="cozy-auth" id="cozyAuthPanel">
           <h3>我的帳號 / Tài khoản</h3>
           <p id="cozyAuthStatus" class="hint">載入中 / Đang tải...</p>
+          <div class="cozy-auth-tabs" role="group" aria-label="Chọn chế độ tài khoản">
+            <button type="button" class="active" id="cozyModeLogin" aria-pressed="true">登入 / Đăng nhập</button>
+            <button type="button" id="cozyModeRegister" aria-pressed="false">註冊 / Đăng ký</button>
+            <button type="button" id="cozyModeReset" aria-pressed="false">忘記密碼 / Quên mật khẩu</button>
+          </div>
+          <p id="cozyModeDescription" class="hint">登入現有帳號 / Đăng nhập tài khoản đã có</p>
           <form id="cozyAuthForm" class="cozy-auth-form">
             <label>電子郵件 / Email<input id="cozyEmail" type="email" autocomplete="email" required></label>
-            <label>密碼 / Mật khẩu<input id="cozyPassword" type="password" autocomplete="current-password" minlength="6" required></label>
-            <div class="cozy-auth-actions">
-              <button class="primary" type="submit">登入 / Đăng nhập</button>
-              <button type="button" id="cozyRegister">註冊 / Đăng ký</button>
-              <button type="button" id="cozyForgot">忘記密碼 / Quên mật khẩu</button>
-            </div>
+            <label id="cozyPasswordField">密碼 / Mật khẩu<input id="cozyPassword" type="password" autocomplete="current-password" minlength="6" required></label>
+            <label id="cozyConfirmField" hidden>確認密碼 / Xác nhận mật khẩu<input id="cozyConfirmPassword" type="password" autocomplete="new-password" minlength="6" disabled></label>
+            <div class="cozy-auth-actions"><button class="primary" type="submit" id="cozyAuthSubmit">登入 / Đăng nhập</button></div>
           </form>
           <div id="cozySignedIn" hidden>
             <button type="button" id="cozyLogout">登出 / Đăng xuất</button>

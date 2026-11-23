@@ -87,3 +87,15 @@ dialog{border:1px solid #edd8c3;border-radius:18px;padding:24px;background:#fffa
 #cozySignedIn button{margin:4px 8px 4px 0}
 body.cozy-dark{background:#201d1a;color:#eee3d8}body.cozy-dark .panel,body.cozy-dark .cozy-auth,body.cozy-dark .sidebar{background:#302923;color:#eee3d8;border-color:#665448}body.cozy-dark .panel h2,body.cozy-dark .panel h3{color:#eee3d8}
 body.cozy-dark .cozy-setting input,body.cozy-dark .cozy-setting select{background:#463a32;color:#fff}
+
+/* Account mode switch: one clear action per mode */
+.cozy-auth-tabs{display:flex;gap:6px;flex-wrap:wrap;max-width:520px;margin:14px 0 8px;padding:5px;background:#fff4e9;border:1px solid #eddccd;border-radius:12px}
+.cozy-auth-tabs button{flex:1 1 120px;border:0;border-radius:9px;padding:10px 12px;background:transparent;color:#72533d;cursor:pointer;font-weight:600}
+.cozy-auth-tabs button.active{background:#df7947;color:white;box-shadow:0 2px 6px #9c624023}
+.cozy-auth-tabs button:focus-visible{outline:2px solid #a65e36;outline-offset:2px}
+.cozy-auth-form [hidden],.cozy-auth [hidden]{display:none!important}
+.cozy-auth-form .cozy-auth-actions{margin-top:4px}
+.cozy-auth-form .cozy-auth-actions button{min-width:190px}
+body.cozy-dark .cozy-auth-tabs{background:#423329;border-color:#6a5140}
+body.cozy-dark .cozy-auth-tabs button{color:#eee0d2}
+body.cozy-dark .cozy-auth-tabs button.active{background:#c96b3b;color:#fff}

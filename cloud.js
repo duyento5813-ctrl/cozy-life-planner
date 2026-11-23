@@ -161,21 +161,63 @@ async function init() {
   client = createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{
     auth:{detectSessionInUrl:true,autoRefreshToken:true,persistSession:true}
   });
-  if ($('cozyAuthForm')) $('cozyAuthForm').onsubmit = async e => {
+  let authMode = 'login';
+  const authModes = {
+    login: ['登入現有帳號 / Đăng nhập tài khoản đã có','登入 / Đăng nhập'],
+    register: ['建立新帳號 / Tạo tài khoản mới','註冊 / Tạo tài khoản'],
+    reset: ['重設密碼 / Nhận email đặt lại mật khẩu','發送郵件 / Gửi email khôi phục']
+  };
+  function setAuthMode(mode) {
+    authMode = mode;
+    for (const [name,id] of [['login','cozyModeLogin'],['register','cozyModeRegister'],['reset','cozyModeReset']]) {
+      const button = $(id); if (!button) continue;
+      button.classList.toggle('active',name === mode);
+      button.setAttribute('aria-pressed',String(name === mode));
+    }
+    $('cozyModeDescription').textContent = authModes[mode][0];
+    $('cozyAuthSubmit').textContent = authModes[mode][1];
+    $('cozyPasswordField').hidden = mode === 'reset';
+    $('cozyPassword').disabled = mode === 'reset';
+    $('cozyPassword').autocomplete = mode === 'register' ? 'new-password' : 'current-password';
+    $('cozyConfirmField').hidden = mode !== 'register';
+    $('cozyConfirmPassword').disabled = mode !== 'register';
+    $('cozyConfirmPassword').value = '';
+    message('');
+  }
+  $('cozyModeLogin').onclick = () => setAuthMode('login');
+  $('cozyModeRegister').onclick = () => setAuthMode('register');
+  $('cozyModeReset').onclick = () => setAuthMode('reset');
+  setAuthMode('login');
+  const authError = error => {
+    if (!error) return '';
+    const m = error.message || String(error);
+    if (/after \d+ seconds|rate limit|too many requests/i.test(m)) return 'Yêu cầu quá nhiều lần. Vui lòng đợi một chút rồi thử lại. (' + m + ')';
+    if (/invalid login credentials/i.test(m)) return 'Email hoặc mật khẩu không đúng, hoặc tài khoản chưa được xác nhận.';
+    if (/email not confirmed/i.test(m)) return 'Vui lòng mở email và xác nhận tài khoản trước khi đăng nhập.';
+    return m;
+  };
+  $('cozyAuthForm').onsubmit = async e => {
     e.preventDefault();
-    const {error} = await client.auth.signInWithPassword({email:$('cozyEmail').value.trim(),password:$('cozyPassword').value});
-    message(error ? error.message : '登入成功 / Đăng nhập thành công');
-  };
-  if ($('cozyRegister')) $('cozyRegister').onclick = async () => {
     const email = $('cozyEmail').value.trim(), password = $('cozyPassword').value;
-    if (!email || password.length < 6) { message('Nhập email và mật khẩu ít nhất 6 ký tự.'); return; }
-    const {error} = await client.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname}});
-    message(error ? error.message : '請檢查驗證郵件 / Kiểm tra email xác nhận đăng ký.');
-  };
-  if ($('cozyForgot')) $('cozyForgot').onclick = async () => {
-    const email = $('cozyEmail').value.trim(); if (!email) { message('Nhập email trước.'); return; }
-    const {error} = await client.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname+'?mode=reset'});
-    message(error ? error.message : '若帳號存在，請檢查郵件 / Nếu tài khoản tồn tại, kiểm tra email.');
+    const submit = $('cozyAuthSubmit');
+    if (!email) { message('Vui lòng nhập email.'); return; }
+    if (authMode !== 'reset' && password.length < 6) { message('Mật khẩu phải có ít nhất 6 ký tự.'); return; }
+    if (authMode === 'register' && password !== $('cozyConfirmPassword').value) { message('Mật khẩu xác nhận không khớp.'); return; }
+    submit.disabled = true;
+    message('處理中 / Đang xử lý...');
+    try {
+      if (authMode === 'login') {
+        const {error} = await client.auth.signInWithPassword({email,password});
+        message(error ? authError(error) : '登入成功 / Đăng nhập thành công.');
+      } else if (authMode === 'register') {
+        const {data,error} = await client.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname}});
+        message(error ? authError(error) : data?.session ? '註冊成功 / Tạo tài khoản thành công.' : '已送出註冊要求 / Đã gửi yêu cầu đăng ký. Hãy kiểm tra email để xác nhận tài khoản (nếu được yêu cầu).');
+      } else {
+        const {error} = await client.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname+'?mode=reset'});
+        message(error ? authError(error) : '若帳號存在，將收到郵件 / Nếu email đã đăng ký, em sẽ nhận được thư khôi phục mật khẩu.');
+      }
+    } catch(err) { console.error(err); message('Không thể kết nối: ' + err.message); }
+    finally { submit.disabled = false; }
   };
   if ($('cozyChangePassword')) $('cozyChangePassword').onclick = async () => {
     const pass = prompt('新密碼 / Mật khẩu mới (ít nhất 6 ký tự)');

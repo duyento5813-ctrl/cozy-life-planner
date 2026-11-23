@@ -150,9 +150,7 @@
         </p>
       </div>
 
-      <div class="account">
-        示範模式 / Bản xem thử
-      </div>
+      <div class="account" id="cozyAccountBadge">離線模式 / Chưa đăng nhập</div>
     </header>
 
     <!-- 1. TRANG CHỦ -->
@@ -439,11 +437,37 @@
           <small>/ Cài đặt hệ thống</small>
         </h2>
 
-        <details class="cozy-setting"><summary>帳號與安全 / Tài khoản và bảo mật</summary>
-          <p class="hint">登入與裝置管理尚未開放 / Đăng nhập và quản lý thiết bị chưa được phát triển.</p>
+        <section class="cozy-auth" id="cozyAuthPanel">
+          <h3>我的帳號 / Tài khoản</h3>
+          <p id="cozyAuthStatus" class="hint">載入中 / Đang tải...</p>
+          <form id="cozyAuthForm" class="cozy-auth-form">
+            <label>電子郵件 / Email<input id="cozyEmail" type="email" autocomplete="email" required></label>
+            <label>密碼 / Mật khẩu<input id="cozyPassword" type="password" autocomplete="current-password" minlength="6" required></label>
+            <div class="cozy-auth-actions">
+              <button class="primary" type="submit">登入 / Đăng nhập</button>
+              <button type="button" id="cozyRegister">註冊 / Đăng ký</button>
+              <button type="button" id="cozyForgot">忘記密碼 / Quên mật khẩu</button>
+            </div>
+          </form>
+          <div id="cozySignedIn" hidden>
+            <button type="button" id="cozyLogout">登出 / Đăng xuất</button>
+            <button type="button" id="cozyChangePassword">修改密碼 / Đổi mật khẩu</button>
+          </div>
+          <p id="cozyAuthMessage" class="hint" role="status" aria-live="polite"></p>
+        </section>
+        <details class="cozy-setting"><summary>語言與外觀 / Ngôn ngữ và giao diện</summary>
+          <label>語言 / Ngôn ngữ <select id="cozyLanguage"><option value="bilingual">繁中 / Việt (Song ngữ)</option><option value="zh-Hant">繁體中文</option><option value="vi">Tiếng Việt</option></select></label>
+          <p class="hint">語言選擇將套用至帳號設定；完整單語翻譯尚未完成 / Lưu lựa chọn ngôn ngữ; bản dịch toàn giao diện chưa hoàn tất.</p>
+          <label>主題 / Giao diện <select id="cozyTheme"><option value="light">淺色 / Sáng</option><option value="dark">深色 / Tối</option><option value="system">跟隨系統 / Theo máy</option></select></label>
         </details>
-        <details class="cozy-setting"><summary>語言設定 / Ngôn ngữ</summary>
-          <p class="hint">繁體中文 / Tiếng Việt — 目前為雙語介面 / Hiện hiển thị song ngữ.</p>
+        <details class="cozy-setting"><summary>通知提醒 / Thông báo</summary>
+          <label><input id="cozyReminders" type="checkbox" checked> 待辦提醒 / Nhắc công việc khi ứng dụng đang mở</label>
+        </details>
+        <details class="cozy-setting" open><summary>雲端同步 / Đồng bộ đám mây</summary>
+          <p id="cozySyncStatus" class="hint">尚未連線 / Chưa kết nối</p>
+          <button type="button" id="cozySyncNow">立即同步 / Đồng bộ ngay</button>
+          <button type="button" id="cozyExportAll">完整備份 / Sao lưu toàn bộ JSON</button>
+          <p class="hint">首次同步請先備份；已有雲端資料時，需選擇保留哪個版本 / Sao lưu trước; khi đã có dữ liệu trên mây, cần chọn phiên bản giữ lại.</p>
         </details>
         <details class="cozy-setting" id="cozyDataSetting"><summary>資料管理 / Quản lý dữ liệu</summary>
           <div id="cozyDataTools"></div>
@@ -502,6 +526,7 @@
 </dialog>
 
 <script src="app.js"></script>
+<script type="module" src="cloud.js"></script>
 
 </body>
 </html>

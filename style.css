@@ -77,3 +77,13 @@ dialog{border:1px solid #edd8c3;border-radius:18px;padding:24px;background:#fffa
 
 /* V3 compact multi-goal selection */
 .cozy-goal-picker{border:1px solid #eee0d2;border-radius:10px;padding:9px 12px;background:#fffaf5;margin:8px 0}.cozy-goal-picker>summary,.cozy-goal-links>summary{cursor:pointer;font-size:13px;color:#765c47}.cozy-goal-options{display:grid;gap:6px;max-height:190px;overflow:auto;padding:9px 0 2px}.cozy-goal-options label{display:flex!important;align-items:center;gap:7px;font-size:12px;margin:0!important}.cozy-goal-options input{width:auto!important;flex-shrink:0;accent-color:#d97845}.cozy-goal-links{padding:4px 12px 10px;margin:-4px 0 8px;border-bottom:1px solid #f0e3d5}.cozy-goal-links>div{font-size:12px;color:#806f61;padding:5px 0}.cozy-task-row .cozy-goal-picker{width:100%}
+
+/* V3.1 account & settings */
+.cozy-auth{border-bottom:1px solid #efdfd0;padding:10px 4px 18px}
+.cozy-auth h3{font-size:16px;margin:8px 0}.cozy-auth-form{display:grid;gap:12px;max-width:460px}
+.cozy-auth-form label,.cozy-setting label{display:block;font-size:13px;margin:10px 0}
+.cozy-auth-form input,.cozy-setting select{display:block;width:100%;max-width:460px;margin-top:6px;padding:10px;border:1px solid #e5d5c7;border-radius:10px;background:#fff;color:#453b32}
+.cozy-setting input[type=checkbox]{width:auto}.cozy-auth-actions{display:flex;flex-wrap:wrap;gap:8px}
+#cozySignedIn button{margin:4px 8px 4px 0}
+body.cozy-dark{background:#201d1a;color:#eee3d8}body.cozy-dark .panel,body.cozy-dark .cozy-auth,body.cozy-dark .sidebar{background:#302923;color:#eee3d8;border-color:#665448}body.cozy-dark .panel h2,body.cozy-dark .panel h3{color:#eee3d8}
+body.cozy-dark .cozy-setting input,body.cozy-dark .cozy-setting select{background:#463a32;color:#fff}

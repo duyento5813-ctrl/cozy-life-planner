@@ -45,7 +45,7 @@ async function sync(force=false){if(!user||busy||paused||!navigator.onLine)retur
  status('已同步 / Đã đồng bộ · '+new Date().toLocaleTimeString());
  }catch(e){console.error(e);status('同步失敗 / Đồng bộ lỗi: '+e.message)}finally{busy=false;}}
 async function initUser(u){user=u;baseline={};lastLocal={};paused=false;showAuth();if(poll)clearInterval(poll);if(u){const owner=localStorage.getItem('cozy-cloud-owner-v1');if(owner&&owner!==u.id){paused=true;status('此瀏覽器已有其他帳號的資料 / Trình duyệt có dữ liệu của tài khoản khác');message('Hãy dùng hồ sơ trình duyệt riêng. Không đồng bộ để tránh lộ dữ liệu giữa các tài khoản.');return;}localStorage.setItem('cozy-cloud-owner-v1',u.id);await sync();poll=setInterval(()=>sync(),4000)}else status('尚未登入 / Chưa đăng nhập');}
-async function init(){applyPrefs();$('cozyExportAll').onclick=backup;['cozyLanguage','cozyTheme','cozyReminders'].forEach(id=>$(id).addEventListener('change',setPrefs));
+async function init(){applyPrefs();showAuth();$('cozyExportAll').onclick=backup;['cozyLanguage','cozyTheme','cozyReminders'].forEach(id=>$(id).addEventListener('change',setPrefs));
  if(!isConfigured()){status('請先設定 supabase-config.js / Cần điền khóa publishable');message('Chỉ dùng publishable key, tuyệt đối không dùng secret/service_role key.');$('cozyAuthForm').hidden=true;return;}
  client=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{detectSessionInUrl:true,autoRefreshToken:true,persistSession:true}});
  $('cozyAuthForm').onsubmit=async e=>{e.preventDefault();const {error}=await client.auth.signInWithPassword({email:$('cozyEmail').value.trim(),password:$('cozyPassword').value});message(error?error.message:'登入成功 / Đăng nhập thành công')};
@@ -54,7 +54,17 @@ async function init(){applyPrefs();$('cozyExportAll').onclick=backup;['cozyLangu
  $('cozyChangePassword').onclick=async()=>{const pass=prompt('新密碼 / Mật khẩu mới (ít nhất 6 ký tự)');if(pass===null)return;if(pass.length<6){message('Mật khẩu quá ngắn.');return;}const {error}=await client.auth.updateUser({password:pass});message(error?error.message:'密碼已更新 / Đã đổi mật khẩu.');};
  $('cozyLogout').onclick=async()=>{if(!confirm('登出？/ Đăng xuất? Dữ liệu cục bộ vẫn còn trên máy này.'))return;const {error}=await client.auth.signOut();if(error)message(error.message);else location.reload()};
  $('cozySyncNow').onclick=()=>{paused=false;sync(true)};
- client.auth.onAuthStateChange((event,session)=>{if(event==='PASSWORD_RECOVERY'){setTimeout(async()=>{const pass=prompt('請設定新密碼 / Nhập mật khẩu mới (ít nhất 6 ký tự)');if(pass&&pass.length>=6){const {error}=await client.auth.updateUser({password:pass});message(error?error.message:'密碼已重設 / Đã đặt lại mật khẩu.')}},200)}if(event==='SIGNED_IN'||event==='SIGNED_OUT'||event==='INITIAL_SESSION'){if(session?.user?.id!==user?.id)initUser(session?.user||null)}});
- const {data}=await client.auth.getUser();if(data?.user?.id!==user?.id)await initUser(data?.user||null);
+ client.auth.onAuthStateChange((event,session)=>{
+  if(event==='PASSWORD_RECOVERY'){
+   setTimeout(async()=>{const pass=prompt('請設定新密碼 / Nhập mật khẩu mới (ít nhất 6 ký tự)');if(pass&&pass.length>=6){const {error}=await client.auth.updateUser({password:pass});message(error?error.message:'密碼已重設 / Đã đặt lại mật khẩu.')}},200);
+  }
+  if(event==='INITIAL_SESSION'||event==='SIGNED_IN'||event==='SIGNED_OUT'){
+   // INITIAL_SESSION must run even when there is no signed-in user.
+   if(event==='INITIAL_SESSION'||session?.user?.id!==user?.id){
+    setTimeout(()=>{initUser(session?.user||null).catch(e=>{console.error(e);status('同步失敗 / Đồng bộ lỗi');message(e.message)})},0);
+   }
+  }
+ });
+
 }
-init().catch(e=>message(e.message));
+init().catch(e=>{console.error(e);status('連線失敗 / Lỗi kết nối');showAuth();message(e.message)});

@@ -99,3 +99,19 @@ body.cozy-dark .cozy-setting input,body.cozy-dark .cozy-setting select{backgroun
 body.cozy-dark .cozy-auth-tabs{background:#423329;border-color:#6a5140}
 body.cozy-dark .cozy-auth-tabs button{color:#eee0d2}
 body.cozy-dark .cozy-auth-tabs button.active{background:#c96b3b;color:#fff}
+
+/* V3.2.1 account UI alignment: compact segmented switch */
+#cozyAuthPanel{width:min(100%,430px);box-sizing:border-box;padding:18px 20px 22px;margin:12px 0 22px;background:#fffaf6;border:1px solid #eadccd;border-radius:16px}
+#cozyAuthPanel .cozy-auth-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;max-width:none;box-sizing:border-box;gap:3px;padding:4px;margin:16px 0 12px;background:#f5e9df;border:1px solid #e9d9cb;border-radius:12px}
+#cozyAuthPanel .cozy-auth-tabs button{display:block;min-width:0;width:100%;margin:0;padding:10px 3px;border:0!important;border-radius:9px;background:transparent!important;box-shadow:none;color:#765b49;font-size:12px;line-height:1.35;white-space:normal}
+#cozyAuthPanel .cozy-auth-tabs button.active{background:#df7947!important;color:#fff!important;box-shadow:0 2px 7px #9c62402b!important}
+#cozyAuthPanel .cozy-auth-form{max-width:none;gap:10px}
+#cozyAuthPanel .cozy-auth-form input{width:100%;max-width:none;box-sizing:border-box}
+#cozyAuthPanel .cozy-auth-actions button{width:100%;min-width:0}
+#cozyAuthPanel #cozyModeDescription{line-height:1.5;margin:8px 0 12px}
+#cozyAuthPanel #cozyAuthMessage:not(:empty){margin-top:12px;line-height:1.5;overflow-wrap:anywhere}
+body.cozy-dark #cozyAuthPanel{background:#302923;border-color:#665448}
+body.cozy-dark #cozyAuthPanel .cozy-auth-tabs{background:#423329;border-color:#6a5140}
+body.cozy-dark #cozyAuthPanel .cozy-auth-tabs button{color:#eee0d2}
+body.cozy-dark #cozyAuthPanel .cozy-auth-tabs button.active{background:#c96b3b!important;color:white!important}
+@media(max-width:480px){#cozyAuthPanel{padding:14px 12px}#cozyAuthPanel .cozy-auth-tabs button{font-size:11px}}

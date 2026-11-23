@@ -259,7 +259,7 @@ function showPage(page) {
   }
 
   if (target === "performance") {
-    renderPerformance();
+    renderPerformance();plannerChanged();
   }
 
   window.scrollTo(0, 0);
@@ -338,7 +338,13 @@ function taskStatus(task,key) {
 }
 function taskNotes(task,key) { return task.overrides?.[taskOrigin(task,key)]?.notes ?? task.notes ?? ''; }
 function taskReminder(task,key) { return task.overrides?.[taskOrigin(task,key)]?.remindAt ?? task.remindAt ?? ''; }
-function taskGoal(task,key) { return task.overrides?.[taskOrigin(task,key)]?.goalRef ?? task.goalRef ?? ''; }
+function goalIds(item) { return [...new Set([...(Array.isArray(item?.goalRefs)?item.goalRefs:[]),...(item?.goalRef?[item.goalRef]:[])].filter(Boolean))]; }
+function taskGoals(task,key) { const o=task.overrides?.[taskOrigin(task,key)]; return o && (Object.hasOwn(o,'goalRefs')||Object.hasOwn(o,'goalRef')) ? goalIds(o) : goalIds(task); }
+function taskGoal(task,key) { return taskGoals(task,key)[0] || ''; }
+function allGoalChoices() { return ['day','month','year'].flatMap(type=>state.goalLists[type].map(g=>({id:g.id,label:`${goalTypes[type]} · ${g.period} · ${g.name}`}))); }
+function goalPicker(selectedIds=[]) { const wrap=document.createElement('details');wrap.className='cozy-goal-picker';const summary=document.createElement('summary');summary.textContent='連結目標 / Liên kết mục tiêu';const list=document.createElement('div');list.className='cozy-goal-options';for(const g of allGoalChoices()){const label=document.createElement('label');const cb=document.createElement('input');cb.type='checkbox';cb.value=g.id;cb.checked=selectedIds.includes(g.id);label.append(cb,document.createTextNode(' '+g.label));list.append(label);}if(!list.children.length)list.append(emptyMessage('尚無目標 / Chưa có mục tiêu'));wrap.append(summary,list);return {wrap,values:()=>[...list.querySelectorAll('input:checked')].map(x=>x.value)}; }
+function plannerChanged(){window.dispatchEvent(new Event('cozy:planner-updated'));}
+
 function taskName(task,key) { return task.overrides?.[key]?.name ?? task.name; }
 function taskImportant(task,key) { return task.overrides?.[key]?.important ?? !!task.important; }
 function getTasksForDate(key) {
@@ -391,15 +397,7 @@ function makeTaskEditor(container, date, task=null, mode="all") {
   repeat.value=task?.repeat || "none"; repeatLabel.append(repeat);
   const notes=makeField("備註 / Ghi chú","text",task ? (mode==='all'?task.notes:taskNotes(task,date)) : '');
   const reminder=makeField("提醒時間 / Nhắc lúc","datetime-local",task ? (mode==='all'?task.remindAt:taskReminder(task,date)) : '');
-  const goalLabel=document.createElement('label');goalLabel.textContent='連結目標 / Liên kết mục tiêu';
-  const goalSelect=document.createElement('select');
-  const noneGoal=document.createElement('option');noneGoal.value='';noneGoal.textContent='不連結 / Không liên kết';goalSelect.append(noneGoal);
-  for(const type of ['day','month','year']) for(const goal of state.goalLists[type]) {
-    const option=document.createElement('option');option.value=goal.id;
-    option.textContent=`${goalTypes[type]} · ${goal.period} · ${goal.name}`;goalSelect.append(option);
-  }
-  goalSelect.value=task ? (mode==='all'?task.goalRef:taskGoal(task,date)) : '';
-  goalLabel.append(goalSelect);
+   const goalPickerControl=goalPicker(task ? (mode==='all'?goalIds(task):taskGoals(task,date)) : []);
   const importantLabel=document.createElement("label");
   const important=document.createElement("input");important.type="checkbox";
   important.checked=task ? mode==="all" ? !!task.important : taskImportant(task,date) : false;
@@ -413,13 +411,13 @@ function makeTaskEditor(container, date, task=null, mode="all") {
   const actions=document.createElement("div");actions.style.display="flex";actions.style.gap="10px";
   const submit=document.createElement("button");submit.type="submit";submit.className="primary";submit.textContent="儲存 / Lưu";
   actions.append(submit,makeButton("取消 / Hủy",()=>form.remove()));
-  form.append(heading,hint,name.label,start.label,repeatLabel,end.label,notes.label,reminder.label,goalLabel,importantLabel,actions);
+  form.append(heading,hint,name.label,start.label,repeatLabel,end.label,notes.label,reminder.label,goalPickerControl.wrap,importantLabel,actions);
   form.onsubmit=e=>{
     e.preventDefault();const title=name.input.value.trim();
     if(!title){alert("請輸入名稱 / Nhập tên công việc.");return;}
     if(single){
       const origin=taskOrigin(task,date);
-      task.overrides[origin]={...task.overrides[origin],name:title,important:important.checked,notes:notes.input.value,remindAt:reminder.input.value,goalRef:goalSelect.value};
+      task.overrides[origin]={...task.overrides[origin],name:title,important:important.checked,notes:notes.input.value,remindAt:reminder.input.value,goalRefs:goalPickerControl.values(),goalRef:""};
     } else {
       const startDate=mode==="future" ? date : start.input.value;
       const endDate=repeat.value==="none" ? "" : end.input.value;
@@ -432,7 +430,7 @@ function makeTaskEditor(container, date, task=null, mode="all") {
         const oldEnd=task.endDate;
         const next={id:makeId(),name:title,date:startDate,repeat:repeat.value,
           endDate:endDate || (oldEnd && oldEnd>=date ? oldEnd : ""),
-          important:important.checked,notes:notes.input.value,remindAt:reminder.input.value,goalRef:goalSelect.value,
+          important:important.checked,notes:notes.input.value,remindAt:reminder.input.value,goalRefs:goalPickerControl.values(),goalRef:"",
           completions:{},completedAt:{},skippedDates:[],moved:{},excludedDates:[],overrides:{}};
         for(const field of ['completedAt','moved']) {
           next[field]={};
@@ -455,10 +453,10 @@ function makeTaskEditor(container, date, task=null, mode="all") {
       } else if(task){
         if(mode==="all" && task.repeat!=="none" && !confirm("修改整個系列可能改變歷史顯示，繼續？\nSửa cả chuỗi có thể đổi cách hiển thị lịch sử. Tiếp tục?"))return;
         Object.assign(task,{name:title,date:startDate,repeat:repeat.value,endDate,important:important.checked,
-          notes:notes.input.value,remindAt:reminder.input.value,goalRef:goalSelect.value});
+          notes:notes.input.value,remindAt:reminder.input.value,goalRefs:goalPickerControl.values(),goalRef:""});
       } else {
         state.tasks.push({id:makeId(),name:title,date:startDate,repeat:repeat.value,
-          endDate,important:important.checked,notes:notes.input.value,remindAt:reminder.input.value,goalRef:goalSelect.value,
+          endDate,important:important.checked,notes:notes.input.value,remindAt:reminder.input.value,goalRefs:goalPickerControl.values(),goalRef:"",
           completions:{},completedAt:{},skippedDates:[],moved:{},excludedDates:[],overrides:{}});
       }
     }
@@ -540,7 +538,7 @@ function syncDailyGoal(task,key) {
   }
 }
 function refreshLinkedGoalViews() {
-  refreshTaskViews();refreshGoals();
+  refreshTaskViews();refreshGoals();plannerChanged();
 }
 function createTaskRow(task,key){
   const wrapper=document.createElement('div');
@@ -711,7 +709,7 @@ let editingEvent=null;
 function openEventEditor(event=null){editingEvent=event;$("eventForm").reset();$("eventName").value=event?.name||"";$("eventDate").value=event?.date||selected;$("eventTime").value=event?.time||"";
   let notes=$('cozyEventNotes');
   if(!notes){const field=makeField('備註 / Ghi chú','text');notes=field.input;notes.id='cozyEventNotes';$('eventForm').append(field.label);}
-  notes.value=event?.notes||'';$('editor').showModal();}
+  notes.value=event?.notes||'';const old=$('cozyEventGoalPicker');if(old)old.remove();const pick=goalPicker(goalIds(event));pick.wrap.id='cozyEventGoalPicker';$('eventForm').querySelector('menu').before(pick.wrap);$('editor')._goalValues=pick.values;$('editor').showModal();}
 function renderEvents(){
   if (!$('selectedTitle') || !$('eventList')) return;
   $("selectedTitle").textContent=`${selected} 行程與待辦 / Lịch và công việc`;
@@ -724,7 +722,7 @@ function renderEvents(){
     const label=document.createElement("span");label.textContent=`${e.time||""} — ${e.name||""}${e.notes?" · "+e.notes:""}`;label.style.flex="1";
     row.append(label,makeButton("編輯 / Sửa",()=>openEventEditor(e)),makeButton("X",()=>{
       if(!confirm("刪除此行程？ / Xóa sự kiện?"))return;
-      putInTrash('event',e,e.name);state.events=state.events.filter(x=>x!==e);if(save())renderCalendar();
+      putInTrash('event',e,e.name);state.events=state.events.filter(x=>x!==e);if(save()){renderCalendar();plannerChanged();}
     }));box.append(row);
   });
   const t=document.createElement("h3");t.textContent="待辦事項 / Công việc";box.append(t);
@@ -752,12 +750,12 @@ $("eventForm").onsubmit=e=>{
   e.preventDefault();if(!$("eventForm").reportValidity())return;
   const name=$("eventName").value.trim(),date=$("eventDate").value,time=$("eventTime").value;
   if(!name||!validDate(date)){alert("資料不正確 / Thông tin không hợp lệ.");return;}
-  const notes=$('cozyEventNotes')?.value||'';
-  if(editingEvent)Object.assign(editingEvent,{name,date,time,notes});
-  else state.events.push({id:makeId(),name,date,time,notes});
+  const notes=$('cozyEventNotes')?.value||'';const goalRefs=$('editor')._goalValues?.()||[];
+  if(editingEvent)Object.assign(editingEvent,{name,date,time,notes,goalRefs,goalRef:''});
+  else state.events.push({id:makeId(),name,date,time,notes,goalRefs});
   if(!save())return;
   selected=date;year=Number(date.slice(0,4));month=Number(date.slice(5,7))-1;
-  editingEvent=null;$("editor").close();renderCalendar();renderScheduleTasks();
+  editingEvent=null;$("editor").close();renderCalendar();renderScheduleTasks();plannerChanged();
 };
 
 // ==========================================
@@ -901,8 +899,7 @@ function renderGoals() {
       goal.important ? "★" : "☆",
       () => {
         goal.important = !goal.important;
-        save();
-        refreshGoals();
+        if(save())refreshGoals();
       },
       "goal-star" + (goal.important ? " starred" : "")
     );
@@ -923,8 +920,7 @@ function renderGoals() {
       if (!value?.trim()) return;
 
       goal.name = value.trim();
-      save();
-      refreshGoals();
+      if(save())refreshGoals();
     });
 
     const remove = makeButton("X", () => {
@@ -936,8 +932,7 @@ function renderGoals() {
           item => item !== goal
         );
 
-      save();
-      refreshGoals();
+      if(save())refreshGoals();
     });
 
     const actions=document.createElement('details');actions.className='cozy-actions';
@@ -946,6 +941,16 @@ function renderGoals() {
     actions.append(more,menu);
     card.append(checkbox, name, star, actions);
     manager.append(card);
+    const linkedTasks=state.tasks.filter(t=>goalIds(t).includes(goal.id)||Object.values(t.overrides||{}).some(o=>goalIds(o).includes(goal.id)));
+    const linkedEvents=state.events.filter(e=>goalIds(e).includes(goal.id));
+    const linkedFinance=(()=>{try{const f=JSON.parse(localStorage.getItem('cozy-finance-v1'))||{};return ['budgets','savings','debts'].flatMap(k=>(f[k]||[]).filter(x=>goalIds(x).includes(goal.id)));}catch{return []}})();
+    if(linkedTasks.length||linkedEvents.length||linkedFinance.length){
+      const detail=document.createElement('details');detail.className='cozy-goal-links';const summary=document.createElement('summary');summary.textContent=`關聯項目 / Liên kết (${linkedTasks.length+linkedEvents.length+linkedFinance.length})`;detail.append(summary);
+      for(const t of linkedTasks){const row=document.createElement('div');row.textContent='☑ '+t.name;detail.append(row)}
+      for(const e of linkedEvents){const row=document.createElement('div');row.textContent='◷ '+e.date+' '+e.name;detail.append(row)}
+      for(const f of linkedFinance){const row=document.createElement('div');row.textContent='＄ '+f.name;detail.append(row)}
+      manager.append(detail);
+    }
   });
 
   const completed = goals.filter(goal => goal.done).length;
@@ -981,7 +986,7 @@ function renderImportantGoals() {
     const important = getGoals(
       type,
       periodKey(type)
-    ).filter(goal => goal.important);
+    ).filter(goal => goal.important && !goal.done);
 
     if (!important.length) continue;
 
@@ -1091,6 +1096,7 @@ function refreshGoals() {
   renderGoals();
   renderImportantGoals();
   renderPerformance();
+  plannerChanged();
 }
 
 // ==========================================
@@ -1276,7 +1282,7 @@ if(!data.accounts.some(a=>a.kind==='bank')){
   data.accounts.push({id:'bank-default',name:'銀行 / Ngân hàng',kind:'bank',currency:'TWD',opening:0});
   try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){console.warn('Could not persist bank migration',e)}
 }
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(data));render();return true}catch(e){alert('無法儲存 / Không lưu được: '+e.message);return false}};
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(data));render();plannerChanged();return true}catch(e){alert('無法儲存 / Không lưu được: '+e.message);return false}};
 const esc=s=>String(s??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const money=(n,cur='TWD')=>new Intl.NumberFormat('en-US',{maximumFractionDigits:cur==='VND'?0:2}).format(Number(n)||0)+' '+cur;
 const monthStart=()=>selectedMonth+'-01';let selectedMonth=now().slice(0,7),view='transactions',filter='all',starOnly=false,search='';
@@ -1293,7 +1299,7 @@ const fmt=val=>money(val,'TWD');
 function refreshRates(){const currencies=[...new Set([...data.accounts.map(a=>a.currency),...data.transactions.map(t=>t.currency)])].filter(c=>c!=='TWD');if(!currencies.length)return Promise.resolve();return fetch('https://open.er-api.com/v6/latest/TWD').then(r=>{if(!r.ok)throw Error('HTTP '+r.status);return r.json()}).then(j=>{if(j.result!=='success'||!j.rates)throw Error('Invalid response');for(const c of currencies){const v=Number(j.rates[c]);if(v>0)data.rates[c]=1/v}data.rateDate=now();data.rateSource='open.er-api.com';save()}).catch(()=>{render();});}
 function addCurrencyField(){return {name:'currency',label:'幣別 / Tiền tệ',type:'select',options:['TWD','VND','USD','JPY','CNY','EUR','KRW','HKD','SGD'].map(v=>[v,v])}}
 function field(f,value){const id='f_'+f.name,required=f.required?'required':'';let input;if(f.type==='select')input=`<select id="${id}" ${required}>${(f.options||[]).map(([v,l])=>`<option value="${esc(v)}" ${String(value)===String(v)?'selected':''}>${esc(l)}</option>`).join('')}</select>`;else if(f.type==='checkbox')input=`<input id="${id}" type="checkbox" ${value?'checked':''}>`;else if(f.type==='textarea')input=`<textarea id="${id}">${esc(value||'')}</textarea>`;else input=`<input id="${id}" type="${f.type||'text'}" value="${esc(value??'')}" ${required} ${f.type==='number'?'min="0" step="any"':''}>`;return `<label class="fin-field">${esc(f.label)}${input}</label>`}
-function dialog(title,fields,values,onSubmit){el('finDialogTitle').textContent=title;el('finFields').innerHTML=fields.map(f=>field(f,values[f.name])).join('');el('finForm').onsubmit=e=>{e.preventDefault();const v={};for(const f of fields){const input=el('f_'+f.name);v[f.name]=f.type==='checkbox'?input.checked:input.value}try{if(onSubmit(v)!==false)el('finDialog').close()}catch(err){alert(err.message)}};el('finDialog').showModal()}
+function dialog(title,fields,values,onSubmit){el('finDialogTitle').textContent=title;el('finFields').innerHTML=fields.map(f=>field(f,values[f.name])).join('');const planDialog=/預算|儲蓄|債務/.test(title);let picker=null;if(planDialog){picker=goalPicker(goalIds(values));el('finFields').append(picker.wrap)}el('finForm').onsubmit=e=>{e.preventDefault();const v={};for(const f of fields){const input=el('f_'+f.name);v[f.name]=f.type==='checkbox'?input.checked:input.value}if(picker){v.goalRefs=picker.values();v.goalRef=''}try{if(onSubmit(v)!==false)el('finDialog').close()}catch(err){alert(err.message)}};el('finDialog').showModal()}
 const opt=(items)=>items.map(x=>[x.id,x.name]);
 function transactionForm(existing=null,defaultsValue={}){const d=Object.assign({type:'expense',date:now(),currency:'TWD',amount:'',name:'',accountId:data.accounts[0]?.id||'',categoryId:'',notes:'',starred:false,repeat:'none'},existing||{},defaultsValue);const fields=[{name:'type',label:'類型 / Loại',type:'select',options:[['expense','支出 / Chi'],['income','收入 / Thu'],['transfer','轉帳 / Chuyển tiền']]},{name:'name',label:'名稱 / Tên giao dịch',required:true},{name:'amount',label:'金額 / Số tiền',type:'number',required:true},addCurrencyField(),{name:'date',label:'日期 / Ngày',type:'date',required:true},{name:'accountId',label:'帳戶 / Tài khoản',type:'select',options:opt(data.accounts)},{name:'toAccountId',label:'轉入帳戶 / Tài khoản nhận (chỉ chuyển tiền)',type:'select',options:[['','—'],...opt(data.accounts)]},{name:'notes',label:'備註 / Ghi chú',type:'textarea'},{name:'starred',label:'★ 重要 / Quan trọng',type:'checkbox'},{name:'repeat',label:'重複 / Lặp lại (chỉ tạo mới)',type:'select',options:[['none','不重複 / Không lặp'],['weekly','每週 / Mỗi tuần'],['monthly','每月 / Mỗi tháng'],['yearly','每年 / Mỗi năm']]}];dialog(existing?'編輯交易 / Sửa giao dịch':'新增交易 / Thêm giao dịch',fields,d,v=>{const n=Number(v.amount);if(!(n>0))throw Error('Số tiền phải lớn hơn 0');if(!acct(v.accountId))throw Error('Chọn tài khoản');if(v.type==='transfer'){if(existing)throw Error('請新增轉帳交易 / Hãy tạo giao dịch chuyển tiền mới.');if(!v.toAccountId||v.toAccountId===v.accountId)throw Error('Chọn tài khoản nhận khác tài khoản nguồn');const dest=acct(v.toAccountId),source=acct(v.accountId);if(source.currency!==v.currency)throw Error('Đơn vị tiền phải trùng tài khoản nguồn');const toAmt=source.currency===dest.currency?n:convert(n,source.currency)!=null&&rate(dest.currency)!=null?convert(n,source.currency)/rate(dest.currency):null;if(toAmt==null)throw Error('Cần kết nối mạng để lấy tỷ giá');const group=uid();data.transactions.push({id:uid(),transferId:group,type:'transfer_out',name:v.name,amount:n,currency:source.currency,date:v.date,accountId:source.id,notes:v.notes},{id:uid(),transferId:group,type:'transfer_in',name:v.name,amount:toAmt,currency:dest.currency,date:v.date,accountId:dest.id,notes:v.notes});return save()}
 const account=acct(v.accountId);if(account.currency!==v.currency)throw Error('Tiền tệ giao dịch phải trùng tài khoản. Hãy chọn tài khoản phù hợp.');const converted=convert(n,v.currency);if(converted===null)throw Error('Chưa có tỷ giá '+v.currency+'/TWD. Hãy kết nối Internet và thử lại.');const t={id:existing?.id||uid(),type:v.type,name:v.name.trim(),amount:n,currency:v.currency,twdAmount:converted,date:v.date,accountId:v.accountId,categoryId:existing?.categoryId||'',notes:v.notes,starred:v.starred};if(existing)Object.assign(existing,t);else if(v.repeat!=='none'){data.recurring.push({id:uid(),template:t,repeat:v.repeat,nextDate:v.date,confirmed:[]});}else data.transactions.push(t);return save()})}
@@ -1456,7 +1462,7 @@ function openBudget(a){
   if(increase>available+0.000001)throw Error('可用餘額不足 / Tiền khả dụng không đủ.');
   const updated={...v,limit,accumulated,durationCount,reservedAmount:accumulated,reserve:true,rollover:false,period:v.durationUnit};
   if(a)Object.assign(a,updated);else data.budgets.push({...updated,id:uid()});
-  save();
+  save();plannerChanged();
  });
 }
 
@@ -1475,7 +1481,7 @@ function openSaving(a){
   const previous=a&&a.accountId===account.id?Number(a.allocated||0):0;
   if(allocated-previous>reserveByAccount(account).available+0.000001)throw Error('可用餘額不足 / Không đủ tiền khả dụng.');
   const updated={...v,target,allocated,durationCount};
-  if(a)Object.assign(a,updated);else data.savings.push({...updated,id:uid()});save();
+  if(a)Object.assign(a,updated);else data.savings.push({...updated,id:uid()});save();plannerChanged();
  });
 }
 function openDebt(a){
@@ -1538,14 +1544,15 @@ const pref=(type,date)=>type==='day'?date:type==='month'?date.slice(0,7):date.sl
 function bounds(type,key){const start=type==='day'?key:type==='month'?key+'-01':key+'-01-01';const end=type==='day'?dayAdd(start,1):type==='month'?dayAdd(new Date(Number(key.slice(0,4)),Number(key.slice(5,7)),1).getFullYear()+'-'+String(new Date(Number(key.slice(0,4)),Number(key.slice(5,7)),1).getMonth()+1).padStart(2,'0')+'-01',0):String(Number(key)+1)+'-01-01';return [start,end]}
 function endOfPeriod(type,key){if(type==='day')return dayAdd(key,1);if(type==='month'){const [y,m]=key.split('-').map(Number);const d=new Date(y,m,1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`}return `${Number(key)+1}-01-01`}
 function taskOccurs(t,day){if(!t.date||day<t.date||t.endDate&&day>t.endDate||t.excludedDates?.includes(day))return false;if(Object.values(t.moved||{}).includes(day))return true;if(Object.prototype.hasOwnProperty.call(t.moved||{},day))return false;const r=t.repeat||'none';if(r==='none')return t.date===day;if(r==='daily')return true;const a=new Date(t.date+'T12:00:00'),b=new Date(day+'T12:00:00');if(r==='weekly')return a.getDay()===b.getDay();if(r==='monthly')return a.getDate()===b.getDate();if(r==='yearly')return a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();return false}
-function taskInstance(t,day){const origin=Object.entries(t.moved||{}).find(([,d])=>d===day)?.[0]||day;const skip=(t.skippedDates||[]).includes(origin);const done=!skip&&!!t.completions?.[origin];return {id:t.id,day,origin,name:t.overrides?.[origin]?.name||t.name||'',done,skipped:skip,goalRef:t.overrides?.[origin]?.goalRef??t.goalRef??''}}
-function collect(type,key,planner){const from=type==='day'?key:type==='month'?key+'-01':key+'-01-01',to=endOfPeriod(type,key),today=dateNow();const items=[];let cursor=from,limit=0;while(cursor<to&&cursor<=today&&limit++<367){for(const t of planner.tasks||[])if(taskOccurs(t,cursor))items.push(taskInstance(t,cursor));cursor=dayAdd(cursor,1)}return items}
+function taskInstance(t,day){const origin=Object.entries(t.moved||{}).find(([,d])=>d===day)?.[0]||day;const skip=(t.skippedDates||[]).includes(origin);const done=!skip&&!!t.completions?.[origin];const o=t.overrides?.[origin];const refs=o&&(Object.hasOwn(o,'goalRefs')||Object.hasOwn(o,'goalRef'))?goalIds(o):goalIds(t);return {id:t.id,day,origin,name:t.overrides?.[origin]?.name||t.name||'',done,skipped:skip,goalRefs:refs}}
+function collect(type,key,planner,includeFuture=false){const from=type==='day'?key:type==='month'?key+'-01':key+'-01-01',to=endOfPeriod(type,key),today=dateNow();const items=[];let cursor=from,limit=0;while(cursor<to&&(includeFuture||cursor<=today)&&limit++<367){for(const t of planner.tasks||[])if(taskOccurs(t,cursor))items.push(taskInstance(t,cursor));cursor=dayAdd(cursor,1)}return items}
 function finance(type,key,fin){let income=0,expense=0,unknown=0;for(const t of fin.transactions||[]){if(!['income','expense'].includes(t.type)||String(t.date||'').slice(0,key.length)!==key)continue;const rate=t.currency==='TWD'?1:Number(fin.rates?.[t.currency]);const amount=t.twdAmount!=null?Number(t.twdAmount):Number(t.amount)*(rate||NaN);if(!Number.isFinite(amount)){unknown++;continue}if(t.type==='income')income+=amount;else expense+=amount}return {income,expense,net:income-expense,unknown}}
 function metrics(type,key){const p=getPlanner(),f=getFin();const goals=(p.goalLists?.[type]||[]).filter(g=>g.period===key);const tasks=collect(type,key,p);return {type,key,goals,tasks,finance:finance(type,key,f)}}
 function donut(done,total){const pct=total?Math.round(done/total*100):0;return `<div class="eff-donut" style="--done:${pct}%"><span>${pct}%</span></div>`}
 function line(label,value){return `<div class="eff-line"><span>${label}</span><strong>${value}</strong></div>`}
 function bar(done,total){const pct=total?done/total*100:0;return `<div class="eff-bar" role="img" aria-label="${done}/${total}"><span style="width:${pct}%"></span></div>`}
-function showGoal(id){const m=metrics($e('effPeriod').value,periodValue()),g=m.goals.find(x=>String(x.id)===id);if(!g)return;const related=m.tasks.filter(t=>t.goalRef===id);const complete=related.filter(t=>t.done).length;const target=$e('effGoalDetail');target.hidden=false;target.innerHTML=`<h4>${safe(g.name)}</h4><div class="eff-goal-detail">${donut(complete,related.length)}<div>${line('關聯任務 / Công việc liên kết',`${complete}/${related.length}`)}${line('目標狀態 / Trạng thái mục tiêu',g.done?'已完成 / Đã hoàn thành':'未完成 / Chưa hoàn thành')}</div></div>${related.length?related.map(t=>`<div class="eff-line"><span>${t.done?'🟢':'🔴'} ${safe(t.name)} <small>${safe(t.day)}</small></span></div>`).join(''):'<p class="empty">尚無關聯任務 / Chưa có công việc liên kết.</p>'}`}
+function showGoal(id){const m=metrics($e('effPeriod').value,periodValue()),g=m.goals.find(x=>String(x.id)===id);if(!g)return;const p=getPlanner(),start=g.period.length===10?g.period:g.period.length===7?g.period+'-01':g.period+'-01-01',end=endOfPeriod(g.period.length===10?'day':g.period.length===7?'month':'year',g.period);
+const related=collect(g.period.length===10?'day':g.period.length===7?'month':'year',g.period,p,true).filter(t=>t.goalRefs.includes(id));const complete=related.filter(t=>t.done).length;const events=(p.events||[]).filter(e=>goalIds(e).includes(id)&&e.date>=start&&e.date<end);const f=getFin();const plans=['budgets','savings','debts'].flatMap(k=>(f[k]||[]).filter(x=>goalIds(x).includes(id)));const target=$e('effGoalDetail');target.hidden=false;target.innerHTML=`<h4>${safe(g.name)}</h4><div class="eff-goal-detail">${donut(complete,related.length)}<div>${line('關聯任務 / Công việc liên kết',`${complete}/${related.length}`)}${line('目標狀態 / Trạng thái mục tiêu',g.done?'已完成 / Đã hoàn thành':'未完成 / Chưa hoàn thành')}</div></div>${related.length?related.map(t=>`<div class="eff-line"><span>${t.done?'🟢':'🔴'} ${safe(t.name)} <small>${safe(t.day)}</small></span></div>`).join(''):'<p class="empty">尚無關聯任務 / Chưa có công việc liên kết.</p>'}${events.map(e=>`<div class="eff-line">◷ ${safe(e.date)} · ${safe(e.name)}</div>`).join('')}${plans.map(x=>`<div class="eff-line">＄ ${safe(x.name)}</div>`).join('')}`}
 function periodValue(){return $e('effDate').value}
 function render(){if(!$e('effReport'))return;const type=$e('effPeriod').value,key=periodValue();if(!key)return;const m=metrics(type,key),goalsDone=m.goals.filter(g=>g.done).length,tasksDone=m.tasks.filter(t=>t.done).length,fin=m.finance;
 $e('effSummary').innerHTML=`<div>${line('目標 / Mục tiêu',`${goalsDone}/${m.goals.length}`)}</div><div>${line('任務 / Công việc',`${tasksDone}/${m.tasks.length}`)}</div><div>${line('收支差額 / Chênh lệch',`${fmt(fin.net)} TWD${fin.unknown?' *':''}`)}</div>`;
@@ -1565,6 +1572,6 @@ function valid(v){return fields.every(f=>Number.isFinite(v[f])&&v[f]>=0)&&v.Hour
 function renderLab(){const v=labInputs(),root=$e('effSimulation');if(!valid(v)){root.textContent='請輸入有效數值 / Vui lòng nhập giá trị hợp lệ.';return}const c=calculate(v);root.innerHTML=`<h3>模擬結果 / Kết quả</h3>${line('預估收支差額 / Chênh lệch dự tính',fmt(c.net)+' TWD')}${line('可安排任務 / Số việc đủ thời gian',fmt(c.capacity))}${line('計畫任務 / Công việc dự kiến',fmt(v.Work))}${line('所需時間 / Thời gian cần',fmt(c.required/60)+' 小時 / giờ')}${line('可用時間 / Thời gian có',fmt(c.available/60)+' 小時 / giờ')}<p class="empty">僅依輸入數值推算，不修改實際資料 / Chỉ là mô phỏng theo giả định, không thay đổi dữ liệu thật.</p>`;renderScenarios()}
 function renderScenarios(){const root=$e('effScenarios');root.innerHTML=cache.scenarios.map(s=>{const c=calculate(s.inputs);return `<div class="eff-line"><span><strong>${safe(s.name)}</strong><small> ${fmt(c.net)} TWD · ${fmt(c.capacity)} 任務</small></span><span><button type="button" data-eff-load="${safe(s.id)}">載入 / Mở</button> <button type="button" data-eff-remove="${safe(s.id)}">刪除</button></span></div>`}).join('')}
 function saveScenario(){const v=labInputs();if(!valid(v))return alert('請輸入有效數值 / Dữ liệu không hợp lệ.');const s={id:String(Date.now())+Math.random(),name:$e('effScenarioName').value.trim()||'方案 '+(cache.scenarios.length+1),inputs:v};cache.scenarios.push(s);if(!persist())cache.scenarios.pop();renderScenarios()}
-function init(){if(!$e('effPeriod'))return;document.querySelectorAll('[data-eff-main]').forEach(b=>b.onclick=()=>{main=b.dataset.effMain;document.querySelectorAll('[data-eff-main]').forEach(x=>x.classList.toggle('active',x===b));$e('effReport').hidden=main!=='report';$e('effLab').hidden=main!=='lab';if(main==='report')render();else renderLab()});$e('effPeriod').onchange=changePeriod;$e('effDate').onchange=render;$e('effSaveReport').onclick=saveReport;$e('effSaveScenario').onclick=saveScenario;for(const f of fields)$e('eff'+f).addEventListener('input',renderLab);$e('effGoals').addEventListener('click',e=>{const b=e.target.closest('[data-eff-goal]');if(b)showGoal(b.dataset.effGoal)});$e('effSaved').addEventListener('click',e=>{const b=e.target.closest('[data-eff-delete-report]');if(!b)return;if(!confirm('刪除此報告？ / Xóa báo cáo đã lưu?'))return;cache.reports=cache.reports.filter(r=>r.id!==b.dataset.effDeleteReport);if(persist())renderSaved()});$e('effScenarios').addEventListener('click',e=>{const load=e.target.closest('[data-eff-load]'),del=e.target.closest('[data-eff-remove]');if(load){const s=cache.scenarios.find(x=>x.id===load.dataset.effLoad);if(s){for(const f of fields)$e('eff'+f).value=s.inputs[f];renderLab()}}if(del){if(!confirm('刪除此方案？ / Xóa phương án?'))return;cache.scenarios=cache.scenarios.filter(x=>x.id!==del.dataset.effRemove);if(persist())renderScenarios()}});window.addEventListener('storage',e=>{if(['cozy-planner-demo-v1','cozy-finance-v1'].includes(e.key)&&!$e('effReport').hidden)render()});document.addEventListener('click',e=>{if(e.target.closest('#performancePage'))return;if(location.hash==='#performance')queueMicrotask(render)},true);changePeriod();renderLab();}
+function init(){if(!$e('effPeriod'))return;document.querySelectorAll('[data-eff-main]').forEach(b=>b.onclick=()=>{main=b.dataset.effMain;document.querySelectorAll('[data-eff-main]').forEach(x=>x.classList.toggle('active',x===b));$e('effReport').hidden=main!=='report';$e('effLab').hidden=main!=='lab';if(main==='report')render();else renderLab()});$e('effPeriod').onchange=changePeriod;$e('effDate').onchange=render;$e('effSaveReport').onclick=saveReport;$e('effSaveScenario').onclick=saveScenario;for(const f of fields)$e('eff'+f).addEventListener('input',renderLab);$e('effGoals').addEventListener('click',e=>{const b=e.target.closest('[data-eff-goal]');if(b)showGoal(b.dataset.effGoal)});$e('effSaved').addEventListener('click',e=>{const b=e.target.closest('[data-eff-delete-report]');if(!b)return;if(!confirm('刪除此報告？ / Xóa báo cáo đã lưu?'))return;cache.reports=cache.reports.filter(r=>r.id!==b.dataset.effDeleteReport);if(persist())renderSaved()});$e('effScenarios').addEventListener('click',e=>{const load=e.target.closest('[data-eff-load]'),del=e.target.closest('[data-eff-remove]');if(load){const s=cache.scenarios.find(x=>x.id===load.dataset.effLoad);if(s){for(const f of fields)$e('eff'+f).value=s.inputs[f];renderLab()}}if(del){if(!confirm('刪除此方案？ / Xóa phương án?'))return;cache.scenarios=cache.scenarios.filter(x=>x.id!==del.dataset.effRemove);if(persist())renderScenarios()}});window.addEventListener('storage',e=>{if(['cozy-planner-demo-v1','cozy-finance-v1'].includes(e.key)&&!$e('effReport').hidden)render()});window.addEventListener('cozy:planner-updated',()=>{if(!$e('effReport').hidden)render()});document.addEventListener('click',e=>{if(e.target.closest('#performancePage'))return;if(location.hash==='#performance')queueMicrotask(render)},true);changePeriod();renderLab();}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
